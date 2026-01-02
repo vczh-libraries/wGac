@@ -41,6 +41,8 @@ protected:
 
     int32_t currentWidth;
     int32_t currentHeight;
+    int32_t minWidth;
+    int32_t minHeight;
     int32_t posX;
     int32_t posY;
     int32_t currentBufferScale;

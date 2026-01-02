@@ -49,6 +49,8 @@ WGacNativeWindow::WGacNativeWindow(WaylandDisplay* _display, INativeWindow::Wind
     , mode(_mode)
     , currentWidth(800)
     , currentHeight(600)
+    , minWidth(0)
+    , minHeight(0)
     , posX(0)
     , posY(0)
     , currentBufferScale(1)
@@ -363,6 +365,13 @@ void WGacNativeWindow::xdg_toplevel_configure(void* data, xdg_toplevel* /*toplev
     }
 
     if (width > 0 && height > 0) {
+        // Clamp to minimum size (some compositors don't enforce min_size during resize)
+        if (self->minWidth > 0 && width < self->minWidth) {
+            width = self->minWidth;
+        }
+        if (self->minHeight > 0 && height < self->minHeight) {
+            height = self->minHeight;
+        }
         self->currentWidth = width;
         self->currentHeight = height;
     }
@@ -568,8 +577,11 @@ NativeRect WGacNativeWindow::GetClientBoundsInScreen() {
 }
 
 void WGacNativeWindow::SuggestMinClientSize(NativeSize size) {
-    // Wayland doesn't have direct min size API, but we can store it for reference
-    // The actual enforcement would need to be done in resize handling
+    minWidth = size.x.value;
+    minHeight = size.y.value;
+    if (toplevel && minWidth > 0 && minHeight > 0) {
+        xdg_toplevel_set_min_size(toplevel, minWidth, minHeight);
+    }
 }
 
 WString WGacNativeWindow::GetTitle() { return title; }

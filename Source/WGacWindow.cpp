@@ -345,6 +345,13 @@ void WGacWindow::xdg_toplevel_configure(void* data, xdg_toplevel* /*toplevel*/,
 
     // Size of 0 means compositor doesn't care, use our preferred size
     if (width > 0 && height > 0) {
+        // Clamp to minimum size (some compositors don't enforce min_size during resize)
+        if (self->config.min_width > 0 && width < self->config.min_width) {
+            width = self->config.min_width;
+        }
+        if (self->config.min_height > 0 && height < self->config.min_height) {
+            height = self->config.min_height;
+        }
         self->current_width = width;
         self->current_height = height;
     } else if (self->current_width == 0 || self->current_height == 0) {
