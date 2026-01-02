@@ -231,6 +231,17 @@ public:
     void SetPointerScrollCallback(PointerScrollCallback cb) { pointer_scroll_cb = std::move(cb); }
     void SetTextInputPreeditCallback(TextInputPreeditCallback cb) { text_input_preedit_cb = std::move(cb); }
     void SetTextInputCommitCallback(TextInputCommitCallback cb) { text_input_commit_cb = std::move(cb); }
+
+    // Clear focus references when a window is destroyed
+    void ClearFocusFor(IWaylandWindow* window) {
+        if (keyboard_focus == window) {
+            keyboard_focus = nullptr;
+        }
+        if (pointer_focus == window) {
+            pointer_focus = nullptr;
+            pointer_focus_surface = nullptr;
+        }
+    }
 };
 
 } // namespace wayland
