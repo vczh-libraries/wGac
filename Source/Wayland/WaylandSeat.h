@@ -233,13 +233,24 @@ public:
     void SetTextInputCommitCallback(TextInputCommitCallback cb) { text_input_commit_cb = std::move(cb); }
 
     // Clear focus references when a window is destroyed
-    void ClearFocusFor(IWaylandWindow* window) {
+    // If parent is provided, restore pointer focus to parent (for popup dismiss)
+    void ClearFocusFor(IWaylandWindow* window, IWaylandWindow* parent = nullptr) {
         if (keyboard_focus == window) {
             keyboard_focus = nullptr;
         }
         if (pointer_focus == window) {
-            pointer_focus = nullptr;
-            pointer_focus_surface = nullptr;
+            if (parent) {
+                // Restore pointer focus to parent window
+                // This is needed because Wayland doesn't send pointer_enter
+                // when a popup is dismissed and pointer is already over parent
+                pointer_focus = parent;
+                // Note: pointer_focus_surface should be updated too, but we don't
+                // have easy access to parent's surface here. The next pointer_motion
+                // or pointer_enter will fix it.
+            } else {
+                pointer_focus = nullptr;
+                pointer_focus_surface = nullptr;
+            }
         }
     }
 };

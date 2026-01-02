@@ -114,14 +114,12 @@ void WaylandSeat::seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
     if (has_keyboard && !self->keyboard) {
         self->keyboard = wl_seat_get_keyboard(seat);
         wl_keyboard_add_listener(self->keyboard, &keyboard_listener, self);
-        printf("Keyboard capability acquired\n");
 
         // Create text input if manager is available
         auto* text_input_manager = self->display->GetTextInputManager();
         if (text_input_manager && !self->text_input) {
             self->text_input = zwp_text_input_manager_v3_get_text_input(text_input_manager, seat);
             zwp_text_input_v3_add_listener(self->text_input, &text_input_listener, self);
-            printf("Text input created\n");
         }
     } else if (!has_keyboard && self->keyboard) {
         if (self->text_input) {
@@ -130,7 +128,6 @@ void WaylandSeat::seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
         }
         wl_keyboard_destroy(self->keyboard);
         self->keyboard = nullptr;
-        printf("Keyboard capability lost\n");
     }
 
     // Handle pointer capability
@@ -138,18 +135,16 @@ void WaylandSeat::seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
     if (has_pointer && !self->pointer) {
         self->pointer = wl_seat_get_pointer(seat);
         wl_pointer_add_listener(self->pointer, &pointer_listener, self);
-        printf("Pointer capability acquired\n");
     } else if (!has_pointer && self->pointer) {
         wl_pointer_destroy(self->pointer);
         self->pointer = nullptr;
-        printf("Pointer capability lost\n");
     }
 }
 
 void WaylandSeat::seat_name(void* data, wl_seat* seat, const char* name) {
     (void)data;
     (void)seat;
-    printf("Seat name: %s\n", name);
+    (void)name;
 }
 
 // Keyboard callbacks
@@ -200,8 +195,6 @@ void WaylandSeat::keyboard_keymap(void* data, wl_keyboard* keyboard,
         fprintf(stderr, "Failed to create XKB state\n");
         return;
     }
-
-    printf("Keymap loaded successfully\n");
 }
 
 void WaylandSeat::keyboard_enter(void* data, wl_keyboard* keyboard,
@@ -215,7 +208,6 @@ void WaylandSeat::keyboard_enter(void* data, wl_keyboard* keyboard,
     if (self->keyboard_focus && self->keyboard_enter_cb) {
         self->keyboard_enter_cb(self->keyboard_focus);
     }
-    printf("Keyboard enter\n");
 }
 
 void WaylandSeat::keyboard_leave(void* data, wl_keyboard* keyboard,
@@ -229,7 +221,6 @@ void WaylandSeat::keyboard_leave(void* data, wl_keyboard* keyboard,
         self->keyboard_leave_cb(self->keyboard_focus);
     }
     self->keyboard_focus = nullptr;
-    printf("Keyboard leave\n");
 }
 
 void WaylandSeat::keyboard_key(void* data, wl_keyboard* keyboard,
@@ -269,7 +260,6 @@ void WaylandSeat::keyboard_repeat_info(void* data, wl_keyboard* keyboard,
 
     self->repeat_rate = rate;
     self->repeat_delay = delay;
-    printf("Keyboard repeat: rate=%d delay=%d\n", rate, delay);
 }
 
 // Pointer callbacks
@@ -285,8 +275,6 @@ void WaylandSeat::pointer_enter(void* data, wl_pointer* pointer,
     self->pointer_x = wl_fixed_to_int(sx);
     self->pointer_y = wl_fixed_to_int(sy);
 
-    printf("pointer_enter: surface=%p window=%p\n", surface, self->pointer_focus);
-
     if (self->pointer_focus && self->pointer_enter_cb) {
         self->pointer_enter_cb(self->pointer_focus, self->pointer_x, self->pointer_y);
     }
@@ -296,9 +284,8 @@ void WaylandSeat::pointer_leave(void* data, wl_pointer* pointer,
                                  uint32_t serial, wl_surface* surface) {
     (void)pointer;
     (void)serial;
+    (void)surface;
     auto* self = static_cast<WaylandSeat*>(data);
-
-    printf("pointer_leave: surface=%p window=%p\n", surface, self->pointer_focus);
 
     if (self->pointer_focus && self->pointer_leave_cb) {
         self->pointer_leave_cb(self->pointer_focus);
@@ -485,16 +472,14 @@ void WaylandSeat::HideCursor() {
 
 // Text input callbacks
 void WaylandSeat::text_input_enter(void* data, zwp_text_input_v3* /*text_input*/, wl_surface* surface) {
-    auto* self = static_cast<WaylandSeat*>(data);
+    (void)data;
     (void)surface;
-    printf("Text input enter\n");
     // Text input is active for this surface
 }
 
 void WaylandSeat::text_input_leave(void* data, zwp_text_input_v3* /*text_input*/, wl_surface* surface) {
     auto* self = static_cast<WaylandSeat*>(data);
     (void)surface;
-    printf("Text input leave\n");
     // Clear any pending state
     self->pending_preedit = PreeditInfo{};
     self->pending_commit.clear();
@@ -558,7 +543,7 @@ void WaylandSeat::text_input_done(void* data, zwp_text_input_v3* /*text_input*/,
 }
 
 // Text input methods
-void WaylandSeat::EnableTextInput(wl_surface* surface, int32_t x, int32_t y, int32_t width, int32_t height) {
+void WaylandSeat::EnableTextInput(wl_surface* /*surface*/, int32_t x, int32_t y, int32_t width, int32_t height) {
     if (!text_input) return;
 
     text_input_enabled = true;
@@ -576,8 +561,6 @@ void WaylandSeat::EnableTextInput(wl_surface* surface, int32_t x, int32_t y, int
 
     // Commit the changes
     zwp_text_input_v3_commit(text_input);
-
-    printf("Text input enabled at (%d, %d, %d, %d)\n", x, y, width, height);
 }
 
 void WaylandSeat::DisableTextInput() {
@@ -586,8 +569,6 @@ void WaylandSeat::DisableTextInput() {
     text_input_enabled = false;
     zwp_text_input_v3_disable(text_input);
     zwp_text_input_v3_commit(text_input);
-
-    printf("Text input disabled\n");
 }
 
 void WaylandSeat::UpdateCursorRect(int32_t x, int32_t y, int32_t width, int32_t height) {

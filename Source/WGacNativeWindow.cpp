@@ -83,8 +83,6 @@ bool WGacNativeWindow::Create()
 {
     if (surface) return false;
 
-    printf("WGacNativeWindow::Create: window=%p mode=%d\n", this, (int)mode);
-
     surface = wl_compositor_create_surface(display->GetCompositor());
     if (!surface) return false;
 
@@ -203,10 +201,7 @@ bool WGacNativeWindow::CreateXdgSurface()
         }
         xdg_toplevel_add_listener(toplevel, &xdg_toplevel_listener_, this);
 
-        printf("CreateXdgSurface: parentWindow=%p parentToplevel=%p\n",
-               parentWindow, parentWindow ? parentWindow->toplevel : nullptr);
         if (parentWindow && parentWindow->toplevel) {
-            printf("CreateXdgSurface: setting parent toplevel\n");
             xdg_toplevel_set_parent(toplevel, parentWindow->toplevel);
         }
 
@@ -228,8 +223,6 @@ bool WGacNativeWindow::CreateXdgSurface()
 
 void WGacNativeWindow::Destroy()
 {
-    printf("WGacNativeWindow::Destroy: window=%p mode=%d\n", this, (int)mode);
-
     // Clear any seat focus references to this window before destroying
     // This prevents dangling pointer issues when compositor sends events
     if (display && display->GetWaylandSeat()) {
@@ -413,10 +406,19 @@ void WGacNativeWindow::xdg_popup_done(void* data, xdg_popup* /*popup*/)
     auto* self = static_cast<WGacNativeWindow*>(data);
     // Popup was dismissed (e.g., user clicked outside)
 
+    // Save parent reference before clearing focus
+    auto* parent = self->parentWindow;
+
     // Clear seat focus references before destroying surfaces
+    // Pass parent to restore pointer focus (Wayland doesn't send pointer_enter
+    // when popup is dismissed and pointer is already over parent)
     if (self->display && self->display->GetWaylandSeat()) {
-        self->display->GetWaylandSeat()->ClearFocusFor(self);
+        self->display->GetWaylandSeat()->ClearFocusFor(self, parent);
     }
+
+    // Reset state so next Show() works correctly
+    self->hasKeyboardFocus = false;
+    self->capturing = false;
 
     // Clean up xdg resources so popup can be shown again
     if (self->frameCallback) {
@@ -441,8 +443,7 @@ void WGacNativeWindow::xdg_popup_done(void* data, xdg_popup* /*popup*/)
     self->hasFirstFrame = false;
     self->visible = false;
 
-    // Save parent reference before closing events
-    auto* parent = self->parentWindow;
+    // Use parent reference saved earlier
     bool parentVisible = parent ? parent->visible : false;
 
     // Follow Windows event sequence: BeforeClosing -> AfterClosing -> Closed
@@ -460,7 +461,6 @@ void WGacNativeWindow::xdg_popup_done(void* data, xdg_popup* /*popup*/)
 
     // Explicitly restore focus to parent window BEFORE Closed()
     if (parent && parentVisible) {
-        printf("xdg_popup_done: restoring focus to parent window %p\n", parent);
         parent->OnFocusChanged(true);
     }
 
@@ -518,10 +518,7 @@ void WGacNativeWindow::OnFrame()
 bool WGacNativeWindow::IsActivelyRefreshing() { return true; }
 NativeSize WGacNativeWindow::GetRenderingOffset() { return NativeSize(0, 0); }
 bool WGacNativeWindow::IsRenderingAsActivated() {
-    bool result = IsActivated();
-    printf("IsRenderingAsActivated: window=%p mode=%d hasKeyboardFocus=%d visible=%d result=%d\n",
-           this, (int)mode, hasKeyboardFocus, visible, result);
-    return result;
+    return IsActivated();
 }
 
 Point WGacNativeWindow::Convert(NativePoint value) { return Point(value.x.value, value.y.value); }
@@ -596,9 +593,7 @@ void WGacNativeWindow::SetCaretPoint(NativePoint point) {
 INativeWindow* WGacNativeWindow::GetParent() { return parentWindow; }
 void WGacNativeWindow::SetParent(INativeWindow* parent) {
     parentWindow = dynamic_cast<WGacNativeWindow*>(parent);
-    printf("SetParent: window=%p parent=%p toplevel=%p\n", this, parentWindow, toplevel);
     if (toplevel) {
-        printf("SetParent: setting xdg parent to %p\n", parentWindow ? parentWindow->toplevel : nullptr);
         xdg_toplevel_set_parent(toplevel, parentWindow ? parentWindow->toplevel : nullptr);
     }
 }
@@ -614,7 +609,6 @@ void WGacNativeWindow::SetIcon(Ptr<GuiImageData> icon) {}
 INativeWindow::WindowSizeState WGacNativeWindow::GetSizeState() { return sizeState; }
 
 void WGacNativeWindow::Show() {
-    printf("WGacNativeWindow::Show: window=%p mode=%d xdgSurface=%p\n", this, (int)mode, xdgSurface);
     visible = true;
 
     bool isPopup = (mode == WindowMode::Popup || mode == WindowMode::Tooltip || mode == WindowMode::Menu);
@@ -630,7 +624,6 @@ void WGacNativeWindow::Show() {
         } else if (!isPopup) {
             // For normal windows, recreate the xdg_surface and toplevel
             if (!CreateXdgSurface()) {
-                printf("Failed to recreate xdg_surface\n");
                 return;
             }
             wl_surface_commit(surface);
@@ -664,9 +657,6 @@ void WGacNativeWindow::ShowRestored() { if (toplevel) xdg_toplevel_unset_maximiz
 void WGacNativeWindow::ShowMaximized() { if (toplevel) xdg_toplevel_set_maximized(toplevel); }
 void WGacNativeWindow::ShowMinimized() { if (toplevel) xdg_toplevel_set_minimized(toplevel); }
 void WGacNativeWindow::Hide(bool closeWindow) {
-    printf("WGacNativeWindow::Hide: window=%p mode=%d closeWindow=%d visible=%d xdgSurface=%p\n",
-           this, (int)mode, closeWindow, visible, xdgSurface);
-
     // If already hidden or never shown, just update state
     if (!visible && !xdgSurface) {
         if (closeWindow) {
@@ -679,8 +669,10 @@ void WGacNativeWindow::Hide(bool closeWindow) {
 
     // Clear seat focus references before destroying surfaces
     // This prevents dangling pointer issues when compositor sends events
+    // Pass parent to restore pointer focus (Wayland doesn't send pointer_enter
+    // when popup is dismissed and pointer is already over parent)
     if (display && display->GetWaylandSeat()) {
-        display->GetWaylandSeat()->ClearFocusFor(this);
+        display->GetWaylandSeat()->ClearFocusFor(this, parentWindow);
     }
 
     // Cancel any pending frame callback
@@ -692,6 +684,10 @@ void WGacNativeWindow::Hide(bool closeWindow) {
 
     bool isPopup = (mode == WindowMode::Popup || mode == WindowMode::Tooltip || mode == WindowMode::Menu);
     if (isPopup) {
+        // Reset state so next Show() works correctly
+        hasKeyboardFocus = false;
+        capturing = false;
+
         // For popup windows, destroy the xdg_popup and xdg_surface to properly close
         if (popupSyncCallback) {
             wl_callback_destroy(popupSyncCallback);
@@ -762,7 +758,6 @@ void WGacNativeWindow::Hide(bool closeWindow) {
         // Explicitly restore focus to parent window BEFORE Closed()
         // This ensures GacUI framework sees correct focus state during cleanup
         if (parent && parentVisible) {
-            printf("Hide: restoring focus to parent window %p (before Closed)\n", parent);
             parent->OnFocusChanged(true);
         }
 
@@ -777,7 +772,6 @@ void WGacNativeWindow::Disable() { enabled = false; for (vint i = 0; i < listene
 bool WGacNativeWindow::IsEnabled() { return enabled; }
 void WGacNativeWindow::SetActivate() { Show(); }
 bool WGacNativeWindow::IsActivated() {
-    printf("IsActivated: window=%p mode=%d hasKeyboardFocus=%d\n", this, (int)mode, hasKeyboardFocus);
     return hasKeyboardFocus;
 }
 
@@ -789,12 +783,10 @@ void WGacNativeWindow::DisableActivate() {}
 bool WGacNativeWindow::IsEnabledActivate() { return true; }
 
 bool WGacNativeWindow::RequireCapture() {
-    printf("RequireCapture: window=%p\n", this);
     capturing = true;
     return true;
 }
 bool WGacNativeWindow::ReleaseCapture() {
-    printf("ReleaseCapture: window=%p\n", this);
     capturing = false;
     return true;
 }
@@ -818,13 +810,11 @@ void WGacNativeWindow::SetTopMost(bool top) { topMost = top; }
 void WGacNativeWindow::SupressAlt() {}
 bool WGacNativeWindow::InstallListener(INativeWindowListener* listener) {
     if (listeners.Contains(listener)) return false;
-    printf("InstallListener: window=%p listener=%p total=%d\n", this, listener, (int)listeners.Count() + 1);
     listeners.Add(listener);
     return true;
 }
 bool WGacNativeWindow::UninstallListener(INativeWindowListener* listener) {
     if (listeners.Contains(listener)) {
-        printf("UninstallListener: window=%p listener=%p total=%d\n", this, listener, (int)listeners.Count() - 1);
         listeners.Remove(listener);
         return true;
     }
@@ -894,9 +884,6 @@ void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
         nativeInfo.middle = info.middle;
         nativeInfo.right = info.right;
     }
-
-    printf("MouseButton: window=%p mode=%d btn=0x%x pressed=%d pos=(%d,%d) left=%d listeners=%d hasKeyboardFocus=%d\n",
-           this, (int)mode, info.button, pressed, info.x, info.y, nativeInfo.left, (int)listeners.Count(), hasKeyboardFocus);
 
     for (auto listener : listeners) {
         if (pressed) {
@@ -1060,23 +1047,17 @@ void WGacNativeWindow::OnKeyEvent(const KeyEventInfo& info) {
 }
 
 void WGacNativeWindow::OnFocusChanged(bool focused) {
-    printf("OnFocusChanged: window=%p mode=%d focused=%d (was %d)\n",
-           this, (int)mode, focused, hasKeyboardFocus);
-
     // Avoid duplicate notifications
     if (hasKeyboardFocus == focused) {
         return;
     }
     hasKeyboardFocus = focused;
 
-    printf("OnFocusChanged: notifying %d listeners\n", (int)listeners.Count());
     for (auto listener : listeners) {
         if (focused) {
-            printf("OnFocusChanged: calling GotFocus and RenderingAsActivated on listener %p\n", listener);
             listener->GotFocus();
             listener->RenderingAsActivated();
         } else {
-            printf("OnFocusChanged: calling LostFocus and RenderingAsDeactivated on listener %p\n", listener);
             listener->LostFocus();
             listener->RenderingAsDeactivated();
         }
