@@ -33,6 +33,10 @@ protected:
     vint maxWidth;
     Alignment paragraphAlignment;
 
+    // Cached alignment offset from last Render() call
+    vint lastAlignOffsetX;
+    vint lastRenderWidth;
+
     vint caretPos;
     Color caretColor;
     bool caretVisible;
@@ -147,24 +151,25 @@ protected:
 
         if (wrapLine && maxWidth > 0)
         {
+            // Wrap mode: set width for both wrapping and alignment
             pango_layout_set_width(layout, maxWidth * PANGO_SCALE);
             pango_layout_set_wrap(layout, PANGO_WRAP_WORD_CHAR);
+
+            PangoAlignment pangoAlign = PANGO_ALIGN_LEFT;
+            switch (paragraphAlignment)
+            {
+                case Alignment::Left: pangoAlign = PANGO_ALIGN_LEFT; break;
+                case Alignment::Center: pangoAlign = PANGO_ALIGN_CENTER; break;
+                case Alignment::Right: pangoAlign = PANGO_ALIGN_RIGHT; break;
+            }
+            pango_layout_set_alignment(layout, pangoAlign);
         }
         else
         {
-            // No wrap - set infinite width so text stays on single line
-            // Alignment still works because Pango aligns within maxWidth bounds during rendering
+            // No wrap: use infinite width, alignment handled in Render()
             pango_layout_set_width(layout, -1);
+            pango_layout_set_alignment(layout, PANGO_ALIGN_LEFT);
         }
-
-        PangoAlignment pangoAlign = PANGO_ALIGN_LEFT;
-        switch (paragraphAlignment)
-        {
-            case Alignment::Left: pangoAlign = PANGO_ALIGN_LEFT; break;
-            case Alignment::Center: pangoAlign = PANGO_ALIGN_CENTER; break;
-            case Alignment::Right: pangoAlign = PANGO_ALIGN_RIGHT; break;
-        }
-        pango_layout_set_alignment(layout, pangoAlign);
 
         // Build attributes from fragments
         PangoAttrList* attrList = pango_attr_list_new();
@@ -418,6 +423,8 @@ public:
         , wrapLine(false)
         , maxWidth(-1)
         , paragraphAlignment(Alignment::Left)
+        , lastAlignOffsetX(0)
+        , lastRenderWidth(0)
         , caretPos(-1)
         , caretVisible(false)
         , caretFrontSide(false)
@@ -656,8 +663,38 @@ public:
 
         cairo_save(cr);
 
+        // Calculate alignment offset when not wrapping
+        vint alignOffsetX = 0;
+        vint availableWidth = bounds.x2 - bounds.x1;
+
+        PangoRectangle logicalRect;
+        pango_layout_get_pixel_extents(layout, nullptr, &logicalRect);
+        vint textWidth = logicalRect.width;
+
+        // Use the available width (from bounds) for alignment
+        vint alignWidth = availableWidth;
+
+        if (!wrapLine && alignWidth > textWidth)
+        {
+            switch (paragraphAlignment)
+            {
+                case Alignment::Center:
+                    alignOffsetX = (alignWidth - textWidth) / 2;
+                    break;
+                case Alignment::Right:
+                    alignOffsetX = alignWidth - textWidth;
+                    break;
+                default: // Left
+                    break;
+            }
+        }
+
+        // Cache for GetCaretBounds/GetCaretFromPoint
+        lastAlignOffsetX = alignOffsetX;
+        lastRenderWidth = alignWidth;
+
         // Render the text
-        cairo_move_to(cr, bounds.x1, bounds.y1);
+        cairo_move_to(cr, bounds.x1 + alignOffsetX, bounds.y1);
         pango_cairo_show_layout(cr, layout);
 
         // Render inline objects
@@ -670,14 +707,14 @@ public:
             PangoRectangle pos;
             pango_layout_index_to_pos(layout, bytePos, &pos);
 
-            // Convert to pixel coordinates and apply bounds offset
-            int objX = bounds.x1 + pos.x / PANGO_SCALE;
+            // Convert to pixel coordinates and apply bounds offset with alignment
+            int objX = bounds.x1 + alignOffsetX + pos.x / PANGO_SCALE;
             int objY = bounds.y1 + pos.y / PANGO_SCALE;
             int objWidth = pos.width / PANGO_SCALE;
             int objHeight = pos.height / PANGO_SCALE;
 
-            // Cache the bounds for hit testing
-            obj.cachedBounds = Rect(Point(objX - bounds.x1, objY - bounds.y1),
+            // Cache the bounds for hit testing (includes alignment offset)
+            obj.cachedBounds = Rect(Point(alignOffsetX + pos.x / PANGO_SCALE, pos.y / PANGO_SCALE),
                                     Size(objWidth, objHeight));
 
             // Render background image if present
@@ -693,8 +730,8 @@ public:
             // Call callback if present
             if (obj.properties.callbackId != -1 && paragraphCallback)
             {
-                // Location is relative to paragraph origin
-                Rect location(Point(objX - bounds.x1, objY - bounds.y1), Size(objWidth, objHeight));
+                // Location is relative to paragraph origin (includes alignment offset)
+                Rect location(Point(alignOffsetX + pos.x / PANGO_SCALE, pos.y / PANGO_SCALE), Size(objWidth, objHeight));
                 Size newSize = paragraphCallback->OnRenderInlineObject(obj.properties.callbackId, location);
                 // Update the properties with new size if it changed
                 if (newSize.x != obj.properties.size.x || newSize.y != obj.properties.size.y)
@@ -711,7 +748,7 @@ public:
             vint bytePos = CharToBytePos(caretPos);
             pango_layout_get_cursor_pos(layout, bytePos, &strongPos, &weakPos);
 
-            int cx = bounds.x1 + strongPos.x / PANGO_SCALE;
+            int cx = bounds.x1 + alignOffsetX + strongPos.x / PANGO_SCALE;
             int cy = bounds.y1 + strongPos.y / PANGO_SCALE;
             int ch = strongPos.height / PANGO_SCALE;
 
@@ -828,7 +865,24 @@ public:
         if (text.Length() == 0)
         {
             Size s = GetSize();
-            return Rect(Point(0, 0), Size(0, s.y > 0 ? s.y : defaultFont.size));
+            // For empty text, position based on alignment
+            vint x = lastAlignOffsetX;
+            if (lastRenderWidth > 0)
+            {
+                switch (paragraphAlignment)
+                {
+                    case Alignment::Center:
+                        x = lastRenderWidth / 2;
+                        break;
+                    case Alignment::Right:
+                        x = lastRenderWidth;
+                        break;
+                    default:
+                        x = 0;
+                        break;
+                }
+            }
+            return Rect(Point(x, 0), Size(0, s.y > 0 ? s.y : defaultFont.size));
         }
 
         PangoRectangle strongPos, weakPos;
@@ -836,10 +890,11 @@ public:
         pango_layout_get_cursor_pos(layout, bytePos, &strongPos, &weakPos);
 
         // Use strong position for LTR, could use weak for RTL context
+        // Add alignment offset
         return Rect(
-            strongPos.x / PANGO_SCALE,
+            lastAlignOffsetX + strongPos.x / PANGO_SCALE,
             strongPos.y / PANGO_SCALE,
-            strongPos.x / PANGO_SCALE + 1,
+            lastAlignOffsetX + strongPos.x / PANGO_SCALE + 1,
             (strongPos.y + strongPos.height) / PANGO_SCALE
         );
     }
@@ -848,8 +903,12 @@ public:
     {
         if (!layout) return -1;
 
+        // Adjust point for alignment offset
+        vint adjustedX = point.x - lastAlignOffsetX;
+        if (adjustedX < 0) adjustedX = 0;
+
         int index, trailing;
-        gboolean inside = pango_layout_xy_to_index(layout, point.x * PANGO_SCALE, point.y * PANGO_SCALE, &index, &trailing);
+        pango_layout_xy_to_index(layout, adjustedX * PANGO_SCALE, point.y * PANGO_SCALE, &index, &trailing);
 
         vint charPos = ByteToCharPos(index);
         if (trailing > 0) charPos++;
