@@ -82,7 +82,6 @@ set(CORE_SOURCES
 
 set(RENDERER_SOURCES
     Source/Renderers/WGacRenderer.cpp
-    Source/Renderers/ElementRenderers.cpp
 )
 
 # Main library
@@ -111,13 +110,5 @@ target_link_libraries(wGac_lib PUBLIC
     rt  # for shm_open
 )
 
-# Test executable
-add_executable(wGac_test
-    Source/main.cpp
-)
-
-target_link_libraries(wGac_test PRIVATE wGac_lib)
-
 # Compile options
 target_compile_options(wGac_lib PRIVATE -Wall -Wextra)
-target_compile_options(wGac_test PRIVATE -Wall -Wextra)
