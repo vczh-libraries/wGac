@@ -463,7 +463,7 @@ public:
 
         ApplyStyleToRange(start, length, [&](TextFragment& frag) {
             frag.backgroundColor = value;
-            frag.hasBackgroundColor = true;
+            frag.hasBackgroundColor = (value.a != 0);
         });
         RebuildLayout();
         return true;
