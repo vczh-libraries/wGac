@@ -1410,22 +1410,61 @@ public:
         AString text = wtoa(element->GetText());
         pango_layout_set_text(layout, text.Buffer(), -1);
 
+        // Set wrap mode and width
+        if (element->GetWrapLine())
+        {
+            pango_layout_set_width(layout, bounds.Width() * PANGO_SCALE);
+            pango_layout_set_wrap(layout, PANGO_WRAP_WORD_CHAR);
+        }
+        else
+        {
+            pango_layout_set_width(layout, -1);
+        }
+
+        // Set ellipsize
+        if (element->GetEllipse())
+        {
+            pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
+        }
+        else
+        {
+            pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_NONE);
+        }
+
+        // Set Pango alignment for text within the layout
+        PangoAlignment pangoAlign = PANGO_ALIGN_LEFT;
+        switch (element->GetHorizontalAlignment()) {
+            case Alignment::Center:
+                pangoAlign = PANGO_ALIGN_CENTER;
+                break;
+            case Alignment::Right:
+                pangoAlign = PANGO_ALIGN_RIGHT;
+                break;
+            default:
+                break;
+        }
+        pango_layout_set_alignment(layout, pangoAlign);
+
         Color c = element->GetColor();
         cairo_set_source_rgba(cr, c.r / 255.0, c.g / 255.0, c.b / 255.0, c.a / 255.0);
 
         double x = bounds.x1;
         double y = bounds.y1;
 
-        // Horizontal alignment
-        switch (element->GetHorizontalAlignment()) {
-            case Alignment::Center:
-                x = bounds.x1 + (bounds.Width() - minSize.x) / 2.0;
-                break;
-            case Alignment::Right:
-                x = bounds.x2 - minSize.x;
-                break;
-            default:
-                break;
+        // For wrapped text, Pango handles horizontal alignment within layout width,
+        // so we only adjust x position for non-wrapped text
+        if (!element->GetWrapLine())
+        {
+            switch (element->GetHorizontalAlignment()) {
+                case Alignment::Center:
+                    x = bounds.x1 + (bounds.Width() - minSize.x) / 2.0;
+                    break;
+                case Alignment::Right:
+                    x = bounds.x2 - minSize.x;
+                    break;
+                default:
+                    break;
+            }
         }
 
         // Vertical alignment
