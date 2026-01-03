@@ -8,8 +8,40 @@ namespace wayland {
 WGacResourceService::WGacResourceService()
     : systemCursors(static_cast<vint>(INativeCursor::SystemCursorType::SmallWaiting) + 1)
 {
-    defaultFont.fontFamily = L"Sans";
-    defaultFont.size = 12;
+    // Use fontconfig to get system default font
+    FcInit();
+    FcPattern* pattern = FcPatternCreate();
+    FcPatternAddString(pattern, FC_FAMILY, (const FcChar8*)"sans-serif");
+    FcConfigSubstitute(nullptr, pattern, FcMatchPattern);
+    FcDefaultSubstitute(pattern);
+
+    FcResult result;
+    FcPattern* match = FcFontMatch(nullptr, pattern, &result);
+
+    if (match) {
+        FcChar8* family = nullptr;
+        double size = 12.0;
+
+        if (FcPatternGetString(match, FC_FAMILY, 0, &family) == FcResultMatch && family) {
+            defaultFont.fontFamily = atow(AString(reinterpret_cast<const char*>(family)));
+        } else {
+            defaultFont.fontFamily = L"Sans";
+        }
+
+        if (FcPatternGetDouble(match, FC_SIZE, 0, &size) == FcResultMatch) {
+            defaultFont.size = static_cast<vint>(size);
+        } else {
+            defaultFont.size = 12;
+        }
+
+        FcPatternDestroy(match);
+    } else {
+        defaultFont.fontFamily = L"Sans";
+        defaultFont.size = 12;
+    }
+
+    FcPatternDestroy(pattern);
+
     defaultFont.antialias = true;
 }
 

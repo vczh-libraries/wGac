@@ -171,8 +171,8 @@ protected:
             attr->end_index = endByte;
             pango_attr_list_insert(attrList, attr);
 
-            // Font size
-            attr = pango_attr_size_new((frag.fontSize > 0 ? frag.fontSize : defaultFont.size) * PANGO_SCALE);
+            // Font size (use absolute size to match font description)
+            attr = pango_attr_size_new_absolute((frag.fontSize > 0 ? frag.fontSize : defaultFont.size) * PANGO_SCALE);
             attr->start_index = startByte;
             attr->end_index = endByte;
             pango_attr_list_insert(attrList, attr);
