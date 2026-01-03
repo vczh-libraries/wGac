@@ -226,9 +226,11 @@ void WaylandSeat::keyboard_leave(void* data, wl_keyboard* keyboard,
 void WaylandSeat::keyboard_key(void* data, wl_keyboard* keyboard,
                                 uint32_t serial, uint32_t time, uint32_t key, uint32_t state) {
     (void)keyboard;
-    (void)serial;
     (void)time;
     auto* self = static_cast<WaylandSeat*>(data);
+
+    // Track keyboard serial for clipboard operations
+    self->last_keyboard_serial = serial;
 
     if (!self->keyboard_focus) return;
 

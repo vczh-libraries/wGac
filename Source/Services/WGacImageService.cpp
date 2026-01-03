@@ -1,33 +1,38 @@
 #include "WGacImageService.h"
-#include <gdk-pixbuf/gdk-pixbuf.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_NO_STDIO
+#include "../ThirdParty/stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STBI_WRITE_NO_STDIO
+#include "../ThirdParty/stb_image_write.h"
+
+#include <cstring>
+#include <fstream>
+#include <vector>
 
 namespace vl {
 namespace presentation {
 namespace wayland {
 
-// Helper function to copy pixbuf to cairo surface
-static void copy_pixbuf_to_surface(GdkPixbuf* pixbuf, cairo_surface_t* surface)
+// Helper function to copy RGBA pixels to cairo surface (ARGB32 with premultiplied alpha)
+static void copy_rgba_to_surface(const unsigned char* pixels, int width, int height, cairo_surface_t* surface)
 {
-    int width = gdk_pixbuf_get_width(pixbuf);
-    int height = gdk_pixbuf_get_height(pixbuf);
-    int rowstride = gdk_pixbuf_get_rowstride(pixbuf);
-    int n_channels = gdk_pixbuf_get_n_channels(pixbuf);
-    guchar* pixels = gdk_pixbuf_get_pixels(pixbuf);
-
     unsigned char* dest = cairo_image_surface_get_data(surface);
     int dest_stride = cairo_image_surface_get_stride(surface);
 
     cairo_surface_flush(surface);
 
     for (int y = 0; y < height; y++) {
-        guchar* src_row = pixels + y * rowstride;
+        const unsigned char* src_row = pixels + y * width * 4;
         uint32_t* dest_row = (uint32_t*)(dest + y * dest_stride);
 
         for (int x = 0; x < width; x++) {
-            guchar r = src_row[x * n_channels + 0];
-            guchar g = src_row[x * n_channels + 1];
-            guchar b = src_row[x * n_channels + 2];
-            guchar a = (n_channels == 4) ? src_row[x * n_channels + 3] : 255;
+            unsigned char r = src_row[x * 4 + 0];
+            unsigned char g = src_row[x * 4 + 1];
+            unsigned char b = src_row[x * 4 + 2];
+            unsigned char a = src_row[x * 4 + 3];
 
             // Cairo uses premultiplied alpha
             r = r * a / 255;
@@ -40,6 +45,29 @@ static void copy_pixbuf_to_surface(GdkPixbuf* pixbuf, cairo_surface_t* surface)
     }
 
     cairo_surface_mark_dirty(surface);
+}
+
+// Helper to read file into memory
+static std::vector<unsigned char> read_file(const char* path)
+{
+    std::vector<unsigned char> data;
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) return data;
+
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    data.resize(size);
+    file.read(reinterpret_cast<char*>(data.data()), size);
+    return data;
+}
+
+// Callback for stb_image_write to write to vector
+static void stbi_write_callback(void* context, void* data, int size)
+{
+    std::vector<unsigned char>* vec = static_cast<std::vector<unsigned char>*>(context);
+    unsigned char* bytes = static_cast<unsigned char*>(data);
+    vec->insert(vec->end(), bytes, bytes + size);
 }
 
 // WGacImageFrame implementation
@@ -74,16 +102,30 @@ Size WGacImageFrame::GetSize()
 
 bool WGacImageFrame::SetCache(void* key, Ptr<INativeImageFrameCache> cache)
 {
-    return false;
+    if (caches.Keys().Contains(key)) {
+        return false;
+    }
+    caches.Add(key, cache);
+    return true;
 }
 
 Ptr<INativeImageFrameCache> WGacImageFrame::GetCache(void* key)
 {
+    vint index = caches.Keys().IndexOf(key);
+    if (index != -1) {
+        return caches.Values()[index];
+    }
     return nullptr;
 }
 
 Ptr<INativeImageFrameCache> WGacImageFrame::RemoveCache(void* key)
 {
+    vint index = caches.Keys().IndexOf(key);
+    if (index != -1) {
+        Ptr<INativeImageFrameCache> cache = caches.Values()[index];
+        caches.Remove(key);
+        return cache;
+    }
     return nullptr;
 }
 
@@ -125,66 +167,122 @@ INativeImageFrame* WGacImage::GetFrame(vint index)
     return nullptr;
 }
 
-void WGacImage::SaveToStream(stream::IStream& stream, FormatType formatType)
+void WGacImage::SaveToStream(stream::IStream& imageStream, FormatType format)
 {
-    // TODO: Implement
+    if (frames.Count() == 0) return;
+
+    WGacImageFrame* frame = frames[0].Obj();
+    cairo_surface_t* surface = frame->GetSurface();
+    if (!surface) return;
+
+    int width = cairo_image_surface_get_width(surface);
+    int height = cairo_image_surface_get_height(surface);
+    int stride = cairo_image_surface_get_stride(surface);
+    unsigned char* data = cairo_image_surface_get_data(surface);
+
+    // Convert from Cairo ARGB32 (premultiplied) to RGBA
+    std::vector<unsigned char> rgba(width * height * 4);
+    for (int y = 0; y < height; y++) {
+        uint32_t* src_row = (uint32_t*)(data + y * stride);
+        unsigned char* dest_row = rgba.data() + y * width * 4;
+
+        for (int x = 0; x < width; x++) {
+            uint32_t pixel = src_row[x];
+            unsigned char a = (pixel >> 24) & 0xFF;
+            unsigned char r = (pixel >> 16) & 0xFF;
+            unsigned char g = (pixel >> 8) & 0xFF;
+            unsigned char b = pixel & 0xFF;
+
+            // Unpremultiply alpha
+            if (a > 0 && a < 255) {
+                r = r * 255 / a;
+                g = g * 255 / a;
+                b = b * 255 / a;
+            }
+
+            dest_row[x * 4 + 0] = r;
+            dest_row[x * 4 + 1] = g;
+            dest_row[x * 4 + 2] = b;
+            dest_row[x * 4 + 3] = a;
+        }
+    }
+
+    std::vector<unsigned char> output;
+
+    switch (format) {
+        case INativeImage::Png:
+            stbi_write_png_to_func(stbi_write_callback, &output, width, height, 4, rgba.data(), width * 4);
+            break;
+        case INativeImage::Jpeg:
+            stbi_write_jpg_to_func(stbi_write_callback, &output, width, height, 4, rgba.data(), 90);
+            break;
+        case INativeImage::Bmp:
+            stbi_write_bmp_to_func(stbi_write_callback, &output, width, height, 4, rgba.data());
+            break;
+        default:
+            // Default to PNG
+            stbi_write_png_to_func(stbi_write_callback, &output, width, height, 4, rgba.data(), width * 4);
+            break;
+    }
+
+    if (!output.empty()) {
+        imageStream.Write(output.data(), output.size());
+    }
 }
 
 // WGacImageService implementation
 Ptr<INativeImage> WGacImageService::CreateImageFromFile(const WString& path)
 {
     AString apath = wtoa(path);
-    GError* error = nullptr;
-    GdkPixbuf* pixbuf = gdk_pixbuf_new_from_file(apath.Buffer(), &error);
+    std::vector<unsigned char> fileData = read_file(apath.Buffer());
 
-    if (!pixbuf) {
-        if (error) g_error_free(error);
+    if (fileData.empty()) {
         return nullptr;
     }
 
-    int width = gdk_pixbuf_get_width(pixbuf);
-    int height = gdk_pixbuf_get_height(pixbuf);
-
-    cairo_surface_t* surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
-    copy_pixbuf_to_surface(pixbuf, surface);
-    g_object_unref(pixbuf);
-
-    return Ptr(new WGacImage(this, surface));
+    return CreateImageFromMemory(fileData.data(), fileData.size());
 }
 
 Ptr<INativeImage> WGacImageService::CreateImageFromMemory(void* buffer, vint length)
 {
-    GInputStream* stream = g_memory_input_stream_new_from_data(buffer, length, nullptr);
-    GError* error = nullptr;
-    GdkPixbuf* pixbuf = gdk_pixbuf_new_from_stream(stream, nullptr, &error);
-    g_object_unref(stream);
+    int width, height, channels;
+    unsigned char* pixels = stbi_load_from_memory(
+        static_cast<const unsigned char*>(buffer),
+        static_cast<int>(length),
+        &width, &height, &channels, 4  // Force RGBA
+    );
 
-    if (!pixbuf) {
-        if (error) g_error_free(error);
+    if (!pixels) {
         return nullptr;
     }
 
-    int width = gdk_pixbuf_get_width(pixbuf);
-    int height = gdk_pixbuf_get_height(pixbuf);
-
     cairo_surface_t* surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
-    copy_pixbuf_to_surface(pixbuf, surface);
-    g_object_unref(pixbuf);
+    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+        stbi_image_free(pixels);
+        return nullptr;
+    }
+
+    copy_rgba_to_surface(pixels, width, height, surface);
+    stbi_image_free(pixels);
 
     return Ptr(new WGacImage(this, surface));
 }
 
 Ptr<INativeImage> WGacImageService::CreateImageFromStream(stream::IStream& imageStream)
 {
-    stream::MemoryStream memStream;
-    char buffer[4096];
+    std::vector<char> buffer;
+    char chunk[4096];
     while (true) {
-        vint read = imageStream.Read(buffer, sizeof(buffer));
-        if (read == 0) break;
-        memStream.Write(buffer, read);
+        vint bytesRead = imageStream.Read(chunk, sizeof(chunk));
+        if (bytesRead == 0) break;
+        buffer.insert(buffer.end(), chunk, chunk + bytesRead);
     }
 
-    return CreateImageFromMemory((void*)memStream.GetInternalBuffer(), memStream.Size());
+    if (buffer.empty()) {
+        return nullptr;
+    }
+
+    return CreateImageFromMemory(buffer.data(), buffer.size());
 }
 
 }

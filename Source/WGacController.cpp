@@ -48,12 +48,16 @@ public:
             delete display;
             display = nullptr;
         }
+        SetWaylandDisplay(display);
+        clipboardService.Initialize();
         screenService.RefreshScreenInformation();
     }
 
     ~WGacController()
     {
         inputService.StopTimer();
+        // Cleanup clipboard before disconnecting display
+        clipboardService.Cleanup();
         if (display) {
             display->Disconnect();
             delete display;

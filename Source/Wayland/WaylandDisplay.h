@@ -34,6 +34,8 @@ private:
     xdg_wm_base* xdg_wm_base_ = nullptr;
     zxdg_decoration_manager_v1* decoration_manager = nullptr;
     zwp_text_input_manager_v3* text_input_manager = nullptr;
+    wl_data_device_manager* data_device_manager = nullptr;
+    wl_data_device* data_device = nullptr;
 
     int display_fd = -1;
     bool running = false;
@@ -97,6 +99,8 @@ public:
     xdg_wm_base* GetXdgWmBase() const { return xdg_wm_base_; }
     zxdg_decoration_manager_v1* GetDecorationManager() const { return decoration_manager; }
     zwp_text_input_manager_v3* GetTextInputManager() const { return text_input_manager; }
+    wl_data_device_manager* GetDataDeviceManager() const { return data_device_manager; }
+    wl_data_device* GetDataDevice() const { return data_device; }
     WaylandSeat* GetWaylandSeat() const { return wayland_seat; }
 
     // Format support

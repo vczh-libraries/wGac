@@ -89,6 +89,16 @@ void WaylandDisplay::Disconnect() {
         return;
     }
 
+    if (data_device) {
+        wl_data_device_destroy(data_device);
+        data_device = nullptr;
+    }
+
+    if (data_device_manager) {
+        wl_data_device_manager_destroy(data_device_manager);
+        data_device_manager = nullptr;
+    }
+
     if (text_input_manager) {
         zwp_text_input_manager_v3_destroy(text_input_manager);
         text_input_manager = nullptr;
@@ -277,6 +287,12 @@ void WaylandDisplay::registry_global(void* data, wl_registry* registry,
             });
         }
 
+        // Create data_device if data_device_manager is already available
+        if (self->data_device_manager && !self->data_device) {
+            self->data_device = wl_data_device_manager_get_data_device(
+                self->data_device_manager, self->seat);
+        }
+
         if (self->seat_added_callback) {
             self->seat_added_callback(self->seat, name);
         }
@@ -293,6 +309,15 @@ void WaylandDisplay::registry_global(void* data, wl_registry* registry,
     else if (strcmp(interface, zwp_text_input_manager_v3_interface.name) == 0) {
         self->text_input_manager = static_cast<zwp_text_input_manager_v3*>(
             wl_registry_bind(registry, name, &zwp_text_input_manager_v3_interface, 1));
+    }
+    else if (strcmp(interface, wl_data_device_manager_interface.name) == 0) {
+        self->data_device_manager = static_cast<wl_data_device_manager*>(
+            wl_registry_bind(registry, name, &wl_data_device_manager_interface, 3));
+        // Create data_device if seat is already available
+        if (self->seat && !self->data_device) {
+            self->data_device = wl_data_device_manager_get_data_device(
+                self->data_device_manager, self->seat);
+        }
     }
     else if (strcmp(interface, wl_output_interface.name) == 0) {
         auto* output = static_cast<wl_output*>(

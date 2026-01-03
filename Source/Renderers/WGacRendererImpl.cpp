@@ -60,7 +60,21 @@ protected:
         {}
     };
 
+    // Inline object tracking
+    struct InlineObject
+    {
+        vint start;
+        vint length;
+        InlineObjectProperties properties;
+        Rect cachedBounds;  // Cached bounds during last layout
+
+        InlineObject()
+            : start(0), length(0)
+        {}
+    };
+
     List<TextFragment> fragments;
+    List<InlineObject> inlineObjects;
     FontProperties defaultFont;
 
     // Byte position cache for fast conversion
@@ -138,6 +152,8 @@ protected:
         }
         else
         {
+            // No wrap - set infinite width so text stays on single line
+            // Alignment still works because Pango aligns within maxWidth bounds during rendering
             pango_layout_set_width(layout, -1);
         }
 
@@ -229,6 +245,78 @@ protected:
                 attr->end_index = endByte;
                 pango_attr_list_insert(attrList, attr);
             }
+        }
+
+        // Add shape attributes for inline objects
+        // GacUI uses placeholder text like "[Image]" (7 chars) or "[EmbeddedObject]" (16 chars)
+        // for inline objects. The shape attribute applies to each character individually,
+        // so we need to distribute the width across all characters in the range.
+        for (vint i = 0; i < inlineObjects.Count(); i++)
+        {
+            InlineObject& obj = inlineObjects[i];
+            if (obj.length <= 0) continue;
+
+            guint startByte = CharToBytePos(obj.start);
+            guint endByte = CharToBytePos(obj.start + obj.length);
+
+            // Calculate how many UTF-8 bytes are in this range
+            vint byteLength = endByte - startByte;
+            if (byteLength <= 0) continue;
+
+            // Use the size from properties (convert to Pango units)
+            int totalWidth = (int)(obj.properties.size.x * PANGO_SCALE);
+            int height = (int)(obj.properties.size.y * PANGO_SCALE);
+
+            // Baseline: distance from top of object to the text baseline
+            // If baseline is -1, the baseline is at the bottom of the object
+            int baseline;
+            if (obj.properties.baseline < 0)
+            {
+                baseline = height;  // Baseline at bottom
+            }
+            else
+            {
+                baseline = height - (int)(obj.properties.baseline * PANGO_SCALE);
+            }
+
+            // Apply shape attribute to each byte in the range
+            // The first byte gets the full shape dimensions,
+            // subsequent bytes get zero width to avoid accumulating space
+            for (vint b = startByte; b < (vint)endByte; b++)
+            {
+                PangoRectangle inkRect;
+                PangoRectangle logicalRect;
+
+                if (b == (vint)startByte)
+                {
+                    // First byte: full width and height
+                    inkRect.x = 0;
+                    inkRect.y = -baseline;
+                    inkRect.width = totalWidth;
+                    inkRect.height = height;
+                }
+                else
+                {
+                    // Subsequent bytes: zero width, same height (for line height calculation)
+                    inkRect.x = 0;
+                    inkRect.y = -baseline;
+                    inkRect.width = 0;
+                    inkRect.height = height;
+                }
+                logicalRect = inkRect;
+
+                PangoAttribute* attr = pango_attr_shape_new(&inkRect, &logicalRect);
+                attr->start_index = b;
+                attr->end_index = b + 1;
+                pango_attr_list_insert(attrList, attr);
+            }
+
+            // Make the placeholder text invisible (fully transparent)
+            // so it doesn't render on top of the inline object
+            PangoAttribute* fgAttr = pango_attr_foreground_alpha_new(0);
+            fgAttr->start_index = startByte;
+            fgAttr->end_index = endByte;
+            pango_attr_list_insert(attrList, fgAttr);
         }
 
         pango_layout_set_attributes(layout, attrList);
@@ -471,13 +559,63 @@ public:
 
     bool SetInlineObject(vint start, vint length, const InlineObjectProperties& properties) override
     {
-        // TODO: Implement inline objects
+        if (length == 0) return true;
+        if (start < 0 || start + length > text.Length()) return false;
+
+        // Check if this range overlaps with existing inline objects
+        for (vint i = 0; i < inlineObjects.Count(); i++)
+        {
+            InlineObject& obj = inlineObjects[i];
+            if (start < obj.start + obj.length && obj.start < start + length)
+            {
+                // Overlapping range - fail
+                return false;
+            }
+        }
+
+        // Add new inline object
+        InlineObject newObj;
+        newObj.start = start;
+        newObj.length = length;
+        newObj.properties = properties;
+        inlineObjects.Add(newObj);
+
+        // Set render target on background image if present
+        if (properties.backgroundImage)
+        {
+            IGuiGraphicsRenderer* renderer = properties.backgroundImage->GetRenderer();
+            if (renderer)
+            {
+                renderer->SetRenderTarget(renderTarget);
+            }
+        }
+
+        RebuildLayout();
         return true;
     }
 
     bool ResetInlineObject(vint start, vint length) override
     {
-        return true;
+        for (vint i = 0; i < inlineObjects.Count(); i++)
+        {
+            InlineObject& obj = inlineObjects[i];
+            if (obj.start == start && obj.length == length)
+            {
+                // Clear render target on background image if present
+                if (obj.properties.backgroundImage)
+                {
+                    IGuiGraphicsRenderer* renderer = obj.properties.backgroundImage->GetRenderer();
+                    if (renderer)
+                    {
+                        renderer->SetRenderTarget(nullptr);
+                    }
+                }
+                inlineObjects.RemoveAt(i);
+                RebuildLayout();
+                return true;
+            }
+        }
+        return false;
     }
 
     Size GetSize() override
@@ -485,7 +623,11 @@ public:
         if (!layout) return Size(0, 0);
         int width, height;
         pango_layout_get_pixel_size(layout, &width, &height);
-        return Size(width, height);
+        // Add 2 pixels for the caret at the end of text
+        // This ensures the document width is slightly larger than the text width,
+        // so EnsureRectVisible doesn't skip scrolling when caret is at the end.
+        // The extra pixel provides a buffer for rounding errors.
+        return Size(width + 2, height);
     }
 
     bool OpenCaret(vint caret, Color color, bool frontSide) override
@@ -517,6 +659,50 @@ public:
         // Render the text
         cairo_move_to(cr, bounds.x1, bounds.y1);
         pango_cairo_show_layout(cr, layout);
+
+        // Render inline objects
+        for (vint i = 0; i < inlineObjects.Count(); i++)
+        {
+            InlineObject& obj = inlineObjects[i];
+
+            // Get the position of this inline object from the layout
+            vint bytePos = CharToBytePos(obj.start);
+            PangoRectangle pos;
+            pango_layout_index_to_pos(layout, bytePos, &pos);
+
+            // Convert to pixel coordinates and apply bounds offset
+            int objX = bounds.x1 + pos.x / PANGO_SCALE;
+            int objY = bounds.y1 + pos.y / PANGO_SCALE;
+            int objWidth = pos.width / PANGO_SCALE;
+            int objHeight = pos.height / PANGO_SCALE;
+
+            // Cache the bounds for hit testing
+            obj.cachedBounds = Rect(Point(objX - bounds.x1, objY - bounds.y1),
+                                    Size(objWidth, objHeight));
+
+            // Render background image if present
+            if (obj.properties.backgroundImage)
+            {
+                IGuiGraphicsRenderer* graphicsRenderer = obj.properties.backgroundImage->GetRenderer();
+                if (graphicsRenderer)
+                {
+                    graphicsRenderer->Render(Rect(Point(objX, objY), Size(objWidth, objHeight)));
+                }
+            }
+
+            // Call callback if present
+            if (obj.properties.callbackId != -1 && paragraphCallback)
+            {
+                // Location is relative to paragraph origin
+                Rect location(Point(objX - bounds.x1, objY - bounds.y1), Size(objWidth, objHeight));
+                Size newSize = paragraphCallback->OnRenderInlineObject(obj.properties.callbackId, location);
+                // Update the properties with new size if it changed
+                if (newSize.x != obj.properties.size.x || newSize.y != obj.properties.size.y)
+                {
+                    obj.properties.size = newSize;
+                }
+            }
+        }
 
         // Render caret if visible
         if (caretVisible && caretPos >= 0)
@@ -674,6 +860,39 @@ public:
     {
         start = -1;
         length = 0;
+
+        if (!layout) return {};
+
+        // First, use Pango to find the text position at this point
+        int index, trailing;
+        pango_layout_xy_to_index(layout, point.x * PANGO_SCALE, point.y * PANGO_SCALE, &index, &trailing);
+        vint charPos = ByteToCharPos(index);
+
+        // Check if this position falls within any inline object
+        for (vint i = 0; i < inlineObjects.Count(); i++)
+        {
+            InlineObject& obj = inlineObjects[i];
+            if (charPos >= obj.start && charPos < obj.start + obj.length)
+            {
+                // Found matching inline object
+                start = obj.start;
+                length = obj.length;
+                return obj.properties;
+            }
+        }
+
+        // Also check using cached bounds for better hit testing
+        for (vint i = 0; i < inlineObjects.Count(); i++)
+        {
+            InlineObject& obj = inlineObjects[i];
+            if (obj.cachedBounds.Contains(point))
+            {
+                start = obj.start;
+                length = obj.length;
+                return obj.properties;
+            }
+        }
+
         return {};
     }
 

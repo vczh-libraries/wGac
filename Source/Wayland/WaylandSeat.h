@@ -109,6 +109,7 @@ private:
     uint32_t pointer_buttons = 0;
     uint32_t modifiers = 0;
     uint32_t last_pointer_serial = 0;
+    uint32_t last_keyboard_serial = 0;
 
     // Keyboard repeat
     int32_t repeat_rate = 25;   // chars per second
@@ -206,6 +207,11 @@ public:
     int32_t GetPointerX() const { return pointer_x; }
     int32_t GetPointerY() const { return pointer_y; }
     uint32_t GetLastPointerSerial() const { return last_pointer_serial; }
+    uint32_t GetLastKeyboardSerial() const { return last_keyboard_serial; }
+    uint32_t GetLastInputSerial() const {
+        // Return the most recent serial from any input event
+        return last_keyboard_serial > last_pointer_serial ? last_keyboard_serial : last_pointer_serial;
+    }
 
     bool IsModifierPressed(uint32_t mod) const { return (modifiers & mod) != 0; }
 

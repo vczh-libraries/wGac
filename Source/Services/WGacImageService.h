@@ -14,6 +14,7 @@ protected:
     cairo_surface_t* surface;
     INativeImage* image;
     Size size;
+    collections::Dictionary<void*, Ptr<INativeImageFrameCache>> caches;
 
 public:
     WGacImageFrame(INativeImage* image, cairo_surface_t* surface);
