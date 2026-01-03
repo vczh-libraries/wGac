@@ -251,21 +251,19 @@ void WaylandDisplay::registry_global(void* data, wl_registry* registry,
             self->wayland_seat->SetKeyboardEnterCallback([self](IWaylandWindow* w) {
                 if (w) {
                     w->OnFocusChanged(true);
-                    // TODO: Re-enable text input after fixing focus loss issue
                     // Enable text input when window gains keyboard focus
-                    // if (self->wayland_seat) {
-                    //     self->wayland_seat->EnableTextInput(w->GetSurface(), 0, 0, 1, 20);
-                    // }
+                    if (self->wayland_seat) {
+                        self->wayland_seat->EnableTextInput(w->GetSurface(), 0, 0, 1, 20);
+                    }
                 }
             });
             self->wayland_seat->SetKeyboardLeaveCallback([self](IWaylandWindow* w) {
                 if (w) {
                     w->OnFocusChanged(false);
-                    // TODO: Re-enable text input after fixing focus loss issue
                     // Disable text input when window loses keyboard focus
-                    // if (self->wayland_seat) {
-                    //     self->wayland_seat->DisableTextInput();
-                    // }
+                    if (self->wayland_seat) {
+                        self->wayland_seat->DisableTextInput();
+                    }
                 }
             });
             self->wayland_seat->SetKeyEventCallback([](IWaylandWindow* w, const KeyEventInfo& info) {
