@@ -75,6 +75,14 @@ void WGacCallbackService::InvokeNativeWindowDestroying(INativeWindow* window)
     }
 }
 
+void WGacCallbackService::InvokeEnvironmentChanged()
+{
+    for (vint i = 0; i < listeners.Count(); i++)
+    {
+        listeners[i]->EnvironmentChanged();
+    }
+}
+
 }
 }
 }

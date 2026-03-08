@@ -637,7 +637,7 @@ public:
         return Size(width + 2, height);
     }
 
-    bool OpenCaret(vint caret, Color color, bool frontSide) override
+    bool EnableCaret(vint caret, Color color, bool frontSide) override
     {
         caretPos = caret;
         caretColor = color;
@@ -646,10 +646,15 @@ public:
         return true;
     }
 
-    bool CloseCaret() override
+    void DisableCaret() override
     {
         caretVisible = false;
         caretPos = -1;
+    }
+
+    bool BlinkCaret() override
+    {
+        caretVisible = !caretVisible;
         return true;
     }
 
@@ -1013,14 +1018,11 @@ class WGacRenderTarget : public IWGacRenderTarget
 protected:
     wayland::WGacNativeWindow* window;
     wayland::WGacView* view;
-    List<Rect> clippers;
-    vint clipperCoverWholeTargetCounter;
     bool movedWhileRendering;
 
 public:
     WGacRenderTarget(INativeWindow* _window)
-        : clipperCoverWholeTargetCounter(0)
-        , movedWhileRendering(false)
+        : movedWhileRendering(false)
     {
         window = dynamic_cast<wayland::WGacNativeWindow*>(_window);
         if (window) {
@@ -1028,7 +1030,7 @@ public:
         }
     }
 
-    void StartRendering() override
+    void StartRenderingOnNativeWindow() override
     {
         if (view) {
             view->StartRendering();
@@ -1048,18 +1050,18 @@ public:
         }
     }
 
-    RenderTargetFailure StopRendering() override
+    RenderTargetFailure StopRenderingOnNativeWindow() override
     {
         cairo_t* cr = GetCairoContext();
         if (cr) {
             cairo_restore(cr);
         }
-        if (view) {
+        if (view && view->IsRendering()) {
             view->StopRendering();
-        }
-        // Commit the buffer to Wayland surface after rendering
-        if (window) {
-            window->CommitBuffer();
+            // Commit the buffer to Wayland surface after rendering
+            if (window) {
+                window->CommitBuffer();
+            }
         }
         SetCurrentRenderTarget(nullptr);
         bool moved = movedWhileRendering;
@@ -1067,74 +1069,45 @@ public:
         return moved ? RenderTargetFailure::ResizeWhileRendering : RenderTargetFailure::None;
     }
 
-    void PushClipper(Rect clipper, reflection::DescriptableObject* generator) override
+    Size GetCanvasSize() override
     {
-        if (clipperCoverWholeTargetCounter > 0) {
-            clipperCoverWholeTargetCounter++;
-        } else {
-            Rect previousClipper = GetClipper();
-            Rect currentClipper;
-            currentClipper.x1 = previousClipper.x1 > clipper.x1 ? previousClipper.x1 : clipper.x1;
-            currentClipper.y1 = previousClipper.y1 > clipper.y1 ? previousClipper.y1 : clipper.y1;
-            currentClipper.x2 = previousClipper.x2 < clipper.x2 ? previousClipper.x2 : clipper.x2;
-            currentClipper.y2 = previousClipper.y2 < clipper.y2 ? previousClipper.y2 : clipper.y2;
+        if (window) {
+            return window->Convert(window->GetClientSize());
+        }
+        return Size(800, 600);
+    }
 
-            if (currentClipper.x1 < currentClipper.x2 && currentClipper.y1 < currentClipper.y2) {
-                clippers.Add(currentClipper);
-                cairo_t* cr = GetCairoContext();
-                if (cr) {
-                    cairo_save(cr);
-                    cairo_rectangle(cr, currentClipper.Left(), currentClipper.Top(),
-                                    currentClipper.Width(), currentClipper.Height());
-                    cairo_clip(cr);
-                }
-            } else {
-                clipperCoverWholeTargetCounter++;
-            }
+    void AfterPushedClipper(Rect clipper, Rect validArea, reflection::DescriptableObject* generator) override
+    {
+        cairo_t* cr = GetCairoContext();
+        if (cr) {
+            cairo_save(cr);
+            cairo_rectangle(cr, validArea.Left(), validArea.Top(),
+                            validArea.Width(), validArea.Height());
+            cairo_clip(cr);
         }
     }
 
-    void PopClipper(reflection::DescriptableObject* generator) override
+    void AfterPushedClipperAndBecameInvalid(Rect clipper, reflection::DescriptableObject* generator) override
     {
-        if (clippers.Count() > 0) {
-            if (clipperCoverWholeTargetCounter > 0) {
-                clipperCoverWholeTargetCounter--;
-            } else {
-                clippers.RemoveAt(clippers.Count() - 1);
-                cairo_t* cr = GetCairoContext();
-                if (cr) {
-                    cairo_restore(cr);
-                }
-            }
-        }
     }
 
-    Rect GetClipper() override
+    void AfterPoppedClipperAndBecameValid(Rect validArea, bool clipperExists, reflection::DescriptableObject* generator) override
     {
-        if (clippers.Count() == 0) {
-            if (window) {
-                auto size = window->Convert(window->GetClientSize());
-                return Rect(Point(0, 0), size);
-            }
-            return Rect(0, 0, 800, 600);
-        } else {
-            return clippers[clippers.Count() - 1];
-        }
     }
 
-    bool IsClipperCoverWholeTarget() override
+    void AfterPoppedClipper(Rect validArea, bool clipperExists, reflection::DescriptableObject* generator) override
     {
-        return clipperCoverWholeTargetCounter > 0;
+        cairo_t* cr = GetCairoContext();
+        if (cr) {
+            cairo_restore(cr);
+        }
     }
 
     cairo_t* GetCairoContext() override
     {
         return view ? view->GetCairoContext() : nullptr;
     }
-
-    bool IsInHostedRendering() override { return false; }
-    void StartHostedRendering() override {}
-    RenderTargetFailure StopHostedRendering() override { return RenderTargetFailure::None; }
 
     void SetMovedWhileRendering() { movedWhileRendering = true; }
 };
@@ -1883,35 +1856,81 @@ public:
     }
 };
 
+// WGacMain - common renderer main function for both standard and hosted modes
+void WGacMain(INativeController* nativeController, GuiHostedController* hostedController)
+{
+    WGacResourceManager resourceManager;
+    SetWGacResourceManager(&resourceManager);
+    // Install listener on the native controller, not the hosted controller.
+    // In hosted mode, GuiHostedController fires NativeWindowCreated for virtual
+    // GuiHostedWindow objects, which are not real WGacNativeWindows.
+    nativeController->CallbackService()->InstallListener(&resourceManager);
+
+    // Wrap resource manager for hosted mode
+    elements::GuiHostedGraphicsResourceManager* hostedResourceManager = nullptr;
+    if (hostedController)
+    {
+        hostedResourceManager = new elements::GuiHostedGraphicsResourceManager(hostedController, &resourceManager);
+        SetGuiGraphicsResourceManager(hostedResourceManager);
+    }
+    else
+    {
+        SetGuiGraphicsResourceManager(&resourceManager);
+    }
+
+    {
+        GuiSolidLabelElementRenderer::Register();
+        GuiSolidBorderElementRenderer::Register();
+        GuiSolidBackgroundElementRenderer::Register();
+        Gui3DBorderElementRenderer::Register();
+        Gui3DSplitterElementRenderer::Register();
+        GuiGradientBackgroundElementRenderer::Register();
+        GuiImageFrameElementRenderer::Register();
+        GuiPolygonElementRenderer::Register();
+        GuiInnerShadowElementRenderer::Register();
+        GuiFocusRectangleElementRenderer::Register();
+        GuiDocumentElementRenderer::Register();
+    }
+
+    if (hostedController) hostedController->Initialize();
+    {
+        GuiApplicationMain();
+    }
+    if (hostedController) hostedController->Finalize();
+
+    SetGuiGraphicsResourceManager(nullptr);
+    if (hostedResourceManager) delete hostedResourceManager;
+
+    nativeController->CallbackService()->UninstallListener(&resourceManager);
+}
+
 // SetupWGacRenderer implementation
 int SetupWGacRenderer()
 {
     INativeController* controller = wayland::GetWGacController();
     SetNativeController(controller);
     {
-        WGacResourceManager resourceManager;
-        SetGuiGraphicsResourceManager(&resourceManager);
-        SetWGacResourceManager(&resourceManager);
-        controller->CallbackService()->InstallListener(&resourceManager);
-        {
-            GuiSolidLabelElementRenderer::Register();
-            GuiSolidBorderElementRenderer::Register();
-            GuiSolidBackgroundElementRenderer::Register();
-            Gui3DBorderElementRenderer::Register();
-            Gui3DSplitterElementRenderer::Register();
-            GuiGradientBackgroundElementRenderer::Register();
-            GuiImageFrameElementRenderer::Register();
-            GuiPolygonElementRenderer::Register();
-            GuiInnerShadowElementRenderer::Register();
-            GuiFocusRectangleElementRenderer::Register();
-            GuiDocumentElementRenderer::Register();
-        }
-        {
-            GuiApplicationMain();
-        }
-        controller->CallbackService()->UninstallListener(&resourceManager);
+        WGacMain(controller, nullptr);
     }
+    SetNativeController(nullptr);
     wayland::DestroyWGacController(controller);
+    return 0;
+}
+
+// SetupWGacHostedRenderer implementation
+int SetupWGacHostedRenderer()
+{
+    INativeController* nativeController = wayland::GetWGacController();
+
+    auto hostedController = new GuiHostedController(nativeController);
+    SetNativeController(hostedController);
+    SetHostedApplication(hostedController->GetHostedApplication());
+    {
+        WGacMain(nativeController, hostedController);
+    }
+    SetNativeController(nullptr);
+    delete hostedController;
+    wayland::DestroyWGacController(nativeController);
     return 0;
 }
 

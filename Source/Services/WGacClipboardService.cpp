@@ -458,9 +458,17 @@ void WGacClipboardService::data_source_send(void* data, wl_data_source* /*source
     if (IsSupportedTextMime(mime_type) && !self->pending_text.empty()) {
         WriteToFd(fd, self->pending_text.c_str(), self->pending_text.size());
     } else if (IsSupportedImageMime(mime_type) && self->pending_image) {
-        // TODO: Encode image to PNG and write to fd
-        // For now just close
-        close(fd);
+        stream::MemoryStream memStream;
+        self->pending_image->SaveToStream(memStream, INativeImage::Png);
+        memStream.SeekFromBegin(0);
+        auto size = memStream.Size();
+        if (size > 0) {
+            std::vector<char> buf(size);
+            memStream.Read(buf.data(), size);
+            WriteToFd(fd, buf.data(), size);
+        } else {
+            close(fd);
+        }
     } else {
         close(fd);
     }

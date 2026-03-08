@@ -110,9 +110,10 @@ add_subdirectory(GacUI_Controls/Localization)
 add_subdirectory(GacUI_Controls/MenuVisibility)
 add_subdirectory(GacUI_Controls/ProgressAndAsync)
 add_subdirectory(GacUI_Controls/QueryService)
-# add_subdirectory(GacUI_Controls/TextEditor)  # Disabled - API changes in 1.3.0
+# add_subdirectory(GacUI_Controls/TextEditor)  # Disabled - colorizer APIs removed in newer GacUI
 add_subdirectory(GacUI_Controls/TriplePhaseImageButton)
 add_subdirectory(GacUI_ControlTemplate/WindowSkin)
+add_subdirectory(GacUI_ControlTemplate/FullControlTest)
 
 # Copy resources
 list(APPEND CATEGORIES GacUI_Controls GacUI_ControlTemplate GacUI_HelloWorlds GacUI_Layout GacUI_Xml)

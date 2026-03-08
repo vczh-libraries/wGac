@@ -1,4 +1,5 @@
 #include <locale>
+#include <cstring>
 #include "Renderers/WGacRenderer.h"
 #include "Skins/DarkSkin/DarkSkin.h"
 
@@ -28,5 +29,18 @@ GUI_REGISTER_PLUGIN(DefaultSkinPlugin)
 int main(int argc, char** argv)
 {
     std::locale::global(std::locale(""));
-    return vl::presentation::elements::wgac::SetupWGacRenderer();
+
+    bool hosted = false;
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--hosted") == 0)
+        {
+            hosted = true;
+        }
+    }
+
+    if (hosted)
+        return vl::presentation::elements::wgac::SetupWGacHostedRenderer();
+    else
+        return vl::presentation::elements::wgac::SetupWGacRenderer();
 }

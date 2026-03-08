@@ -18,7 +18,7 @@ class WGacView;
 namespace elements {
 namespace wgac {
 
-class IWGacRenderTarget : public Object, public IGuiGraphicsRenderTarget
+class IWGacRenderTarget : public elements::GuiGraphicsRenderTarget
 {
 public:
     virtual cairo_t* GetCairoContext() = 0;
@@ -53,6 +53,7 @@ inline cairo_t* GetCurrentWGacContextFromRenderTarget()
 }
 
 extern int SetupWGacRenderer();
+extern int SetupWGacHostedRenderer();
 
 }
 }

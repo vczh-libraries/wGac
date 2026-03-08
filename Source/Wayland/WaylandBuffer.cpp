@@ -251,7 +251,9 @@ void WaylandBuffer::BeginDraw() {
 
 void WaylandBuffer::EndDraw() {
     // Flush cairo drawing to the surface
-    cairo_surface_flush(cairo_surface);
+    if (cairo_surface) {
+        cairo_surface_flush(cairo_surface);
+    }
 }
 
 // WaylandBufferPool implementation
