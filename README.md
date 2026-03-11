@@ -2,6 +2,8 @@
 
 本目录包含 GacUI 在 Wayland 环境下的测试和示例项目。
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vczh-libraries/wGac)
+
 ## 系统要求
 
 - Linux 系统（支持 Wayland）
