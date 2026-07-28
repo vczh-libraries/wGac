@@ -24,6 +24,7 @@ class WGacController : public Object, public virtual INativeController, public v
 protected:
     List<WGacNativeWindow*> windows;
     INativeWindow* mainWindow;
+    AString applicationId;
 
     WGacCallbackService callbackService;
     WGacInputService inputService;
@@ -40,6 +41,7 @@ protected:
 public:
     WGacController()
         : mainWindow(nullptr)
+        , applicationId(AString::Unmanaged("gacui"))
         , inputService(&GlobalTimerFunc)
         , display(nullptr)
         , running(false)
@@ -88,6 +90,37 @@ public:
         for (vint i = 0; i < windows.Count(); i++)
         {
             result.Add(windows[i]);
+        }
+    }
+
+    const AString& GetApplicationId()
+    {
+        return applicationId;
+    }
+
+    void NotifyNativeWindowTitleChanged(WGacNativeWindow* window)
+    {
+        if (!window || mainWindow != window)
+        {
+            return;
+        }
+
+        auto newApplicationId = wtoa(window->GetTitle());
+        if (newApplicationId.Length() == 0)
+        {
+            newApplicationId = AString::Unmanaged("gacui");
+        }
+        if (applicationId == newApplicationId)
+        {
+            return;
+        }
+
+        // GNOME Shell uses an unmatched Wayland app ID as the dock label.
+        // Keep every toplevel grouped under the main window's current title.
+        applicationId = newApplicationId;
+        for (vint i = 0; i < windows.Count(); i++)
+        {
+            windows[i]->SetApplicationId(applicationId);
         }
     }
 
@@ -158,6 +191,8 @@ public:
     void Run(INativeWindow* window) override
     {
         mainWindow = window;
+        NotifyNativeWindowTitleChanged(
+            dynamic_cast<WGacNativeWindow*>(mainWindow));
         running = true;
 
         inputService.StartTimer();
@@ -333,6 +368,23 @@ void DestroyWGacController(INativeController* controller)
 void GetAllCreatedWGacNativeWindows(List<WGacNativeWindow*>& windows)
 {
     dynamic_cast<WGacController*>(GetWGacController())->GetAllCreatedWGacNativeWindows(windows);
+}
+
+AString GetWGacApplicationId()
+{
+    auto controller = dynamic_cast<WGacController*>(wGacController);
+    return controller
+        ? controller->GetApplicationId()
+        : AString::Unmanaged("gacui");
+}
+
+void NotifyWGacNativeWindowTitleChanged(WGacNativeWindow* window)
+{
+    auto controller = dynamic_cast<WGacController*>(wGacController);
+    if (controller)
+    {
+        controller->NotifyNativeWindowTitleChanged(window);
+    }
 }
 
 void GlobalTimerFunc()

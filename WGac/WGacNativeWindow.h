@@ -21,6 +21,7 @@ class WGacNativeWindow : public Object, public INativeWindow, public IWaylandWin
 {
     template<typename TBase>
     friend class WGacAutomationServiceBase;
+    friend class WGacController;
 
     using WindowListenerList = collections::List<INativeWindowListener*>;
 
@@ -95,6 +96,7 @@ protected:
     xdg_surface* GetXdgSurface() const;
     xdg_toplevel* GetXdgToplevel() const;
     bool RequestClose();
+    void SetApplicationId(const AString& applicationId);
     INativeWindowListener::HitTestResult PerformCustomFrameHitTest(int32_t x, int32_t y);
     void ClearPressedCaptionButton();
 

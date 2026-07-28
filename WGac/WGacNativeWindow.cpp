@@ -1,4 +1,5 @@
 #include "WGacNativeWindow.h"
+#include "WGacController.h"
 #include "WGacGacView.h"
 #include <cstring>
 #include <stdexcept>
@@ -191,7 +192,8 @@ bool WGacNativeWindow::CreateLibdecorFrame()
         ? wtoa(title)
         : AString::Unmanaged("GacUI Window");
     libdecor_frame_set_title(libdecorFrame, aTitle.Buffer());
-    libdecor_frame_set_app_id(libdecorFrame, "gacui");
+    auto applicationId = GetWGacApplicationId();
+    libdecor_frame_set_app_id(libdecorFrame, applicationId.Buffer());
     UpdateNativeParent();
     UpdatePlatformFrame(false);
 
@@ -1078,6 +1080,17 @@ void WGacNativeWindow::SetTitle(const WString& _title) {
     if (libdecorFrame) {
         AString aTitle = wtoa(title);
         libdecor_frame_set_title(libdecorFrame, aTitle.Buffer());
+        if (configured && surface)
+        {
+            wl_surface_commit(surface);
+        }
+    }
+    NotifyWGacNativeWindowTitleChanged(this);
+}
+
+void WGacNativeWindow::SetApplicationId(const AString& applicationId) {
+    if (libdecorFrame) {
+        libdecor_frame_set_app_id(libdecorFrame, applicationId.Buffer());
         if (configured && surface)
         {
             wl_surface_commit(surface);

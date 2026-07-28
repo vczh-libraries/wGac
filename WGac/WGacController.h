@@ -12,6 +12,8 @@ class WGacNativeWindow;
 extern INativeController* GetWGacController();
 extern void DestroyWGacController(INativeController* controller);
 extern void GetAllCreatedWGacNativeWindows(collections::List<WGacNativeWindow*>& windows);
+extern AString GetWGacApplicationId();
+extern void NotifyWGacNativeWindowTitleChanged(WGacNativeWindow* window);
 
 }
 }
