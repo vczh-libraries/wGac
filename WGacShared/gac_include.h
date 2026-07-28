@@ -2,7 +2,6 @@
 #define WGAC_SHARED_GAC_INCLUDE
 
 #include "GacUI.h"
-#include "Wayland/WaylandDisplay.h"
 
 using namespace vl;
 using namespace vl::collections;
@@ -36,10 +35,7 @@ public:
         auto theme = Ptr(new darkskin::Theme);
         if (!GetHostedApplication())
         {
-            auto display = wayland::GetWaylandDisplay();
-            theme->PreferCustomFrameWindow = Nullable<bool>(
-                !display || display->PreferCustomFrameWindow()
-                );
+            theme->PreferCustomFrameWindow = Nullable<bool>(false);
         }
         RegisterTheme(theme);
     }

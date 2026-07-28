@@ -10,6 +10,7 @@ pkg_check_modules(CAIRO REQUIRED IMPORTED_TARGET cairo pangocairo)
 pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 pkg_check_modules(URING REQUIRED IMPORTED_TARGET liburing)
+pkg_check_modules(LIBDECOR REQUIRED IMPORTED_TARGET libdecor-0)
 
 set(GACUI_COMMON_FILES
     "../Import/Vlpp.cpp"
@@ -78,7 +79,9 @@ target_link_libraries(WGac PUBLIC
     PkgConfig::CAIRO
     PkgConfig::FONTCONFIG
     PkgConfig::GIO
+    PkgConfig::LIBDECOR
     Threads::Threads
+    ${CMAKE_DL_LIBS}
     rt
 )
 

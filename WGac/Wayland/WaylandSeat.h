@@ -92,6 +92,7 @@ private:
     wl_keyboard* keyboard = nullptr;
     wl_pointer* pointer = nullptr;
     zwp_text_input_v3* text_input = nullptr;
+    std::string name;
 
     // XKB keyboard state
     xkb_context* xkb_ctx = nullptr;
@@ -110,6 +111,10 @@ private:
     uint32_t modifiers = 0;
     uint32_t last_pointer_serial = 0;
     uint32_t last_keyboard_serial = 0;
+    uint32_t last_input_serial = 0;
+    uint32_t current_input_serial = 0;
+    uint32_t pointer_press_serial = 0;
+    uint32_t keyboard_press_serial = 0;
 
     // Keyboard repeat
     int32_t repeat_rate = 25;   // chars per second
@@ -200,6 +205,7 @@ public:
     wl_seat* GetSeat() const { return seat; }
     wl_pointer* GetPointer() const { return pointer; }
     wl_keyboard* GetKeyboard() const { return keyboard; }
+    const std::string& GetName() const { return name; }
 
     IWaylandWindow* GetKeyboardFocus() const { return keyboard_focus; }
     IWaylandWindow* GetPointerFocus() const { return pointer_focus; }
@@ -208,10 +214,8 @@ public:
     int32_t GetPointerY() const { return pointer_y; }
     uint32_t GetLastPointerSerial() const { return last_pointer_serial; }
     uint32_t GetLastKeyboardSerial() const { return last_keyboard_serial; }
-    uint32_t GetLastInputSerial() const {
-        // Return the most recent serial from any input event
-        return last_keyboard_serial > last_pointer_serial ? last_keyboard_serial : last_pointer_serial;
-    }
+    uint32_t GetLastInputSerial() const { return last_input_serial; }
+    uint32_t GetCurrentInputSerial() const { return current_input_serial; }
 
     bool IsModifierPressed(uint32_t mod) const { return (modifiers & mod) != 0; }
 

@@ -142,9 +142,9 @@ void WaylandSeat::seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
 }
 
 void WaylandSeat::seat_name(void* data, wl_seat* seat, const char* name) {
-    (void)data;
     (void)seat;
-    (void)name;
+    auto* self = static_cast<WaylandSeat*>(data);
+    self->name = name ? name : "";
 }
 
 // Keyboard callbacks
@@ -231,17 +231,29 @@ void WaylandSeat::keyboard_key(void* data, wl_keyboard* keyboard,
 
     // Track keyboard serial for clipboard operations
     self->last_keyboard_serial = serial;
-
-    if (!self->keyboard_focus) return;
+    self->last_input_serial = serial;
 
     KeyState keyState = (state == WL_KEYBOARD_KEY_STATE_PRESSED)
         ? KeyState::Pressed
         : KeyState::Released;
+    if (keyState == KeyState::Pressed)
+    {
+        self->keyboard_press_serial = serial;
+    }
 
-    KeyEventInfo info = self->CreateKeyEventInfo(key, keyState);
-
-    if (self->key_event_cb) {
+    if (self->keyboard_focus && self->key_event_cb) {
+        KeyEventInfo info = self->CreateKeyEventInfo(key, keyState);
+        // xdg_popup.grab requires the serial of the user action that
+        // triggered the popup. GacUI buttons execute on release, so expose
+        // the initiating press serial during both halves of that gesture
+        // rather than substituting the invalid release serial.
+        self->current_input_serial = self->keyboard_press_serial;
         self->key_event_cb(self->keyboard_focus, info);
+        self->current_input_serial = 0;
+    }
+    if (keyState == KeyState::Released)
+    {
+        self->keyboard_press_serial = 0;
     }
 }
 
@@ -272,6 +284,7 @@ void WaylandSeat::pointer_enter(void* data, wl_pointer* pointer,
     auto* self = static_cast<WaylandSeat*>(data);
 
     self->last_pointer_serial = serial;
+    self->last_input_serial = serial;
     self->pointer_focus_surface = surface;
     self->pointer_focus = self->FindWindowBySurface(surface);
     self->pointer_x = wl_fixed_to_int(sx);
@@ -318,8 +331,13 @@ void WaylandSeat::pointer_button(void* data, wl_pointer* pointer,
     auto* self = static_cast<WaylandSeat*>(data);
 
     self->last_pointer_serial = serial;
+    self->last_input_serial = serial;
 
     bool pressed = (state == WL_POINTER_BUTTON_STATE_PRESSED);
+    if (pressed)
+    {
+        self->pointer_press_serial = serial;
+    }
 
     // Update button state
     if (pressed) {
@@ -331,7 +349,16 @@ void WaylandSeat::pointer_button(void* data, wl_pointer* pointer,
     if (self->pointer_focus && self->pointer_button_cb) {
         MouseEventInfo info = self->CreateMouseEventInfo();
         info.button = button;
+        // GacUI buttons execute on release. Keep using the initiating press
+        // serial for that callback; never substitute pointer-enter or
+        // button-release serials for xdg_popup.grab.
+        self->current_input_serial = self->pointer_press_serial;
         self->pointer_button_cb(self->pointer_focus, info, pressed);
+        self->current_input_serial = 0;
+    }
+    if (!pressed)
+    {
+        self->pointer_press_serial = 0;
     }
 }
 

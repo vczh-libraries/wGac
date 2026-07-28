@@ -14,6 +14,7 @@ The committed `Import/` and `Apps/` snapshots make a normal build self-contained
 sudo apt update
 sudo apt install build-essential clang cmake pkg-config \
     libwayland-dev libxkbcommon-dev \
+    libdecor-0-dev libdecor-0-plugin-1-gtk \
     libcairo2-dev libpango1.0-dev libfontconfig1-dev \
     libgdk-pixbuf-2.0-dev libglib2.0-dev liburing-dev \
     xdg-desktop-portal
@@ -22,6 +23,8 @@ sudo apt install build-essential clang cmake pkg-config \
 Install the portal backend for your desktop as well, such as `xdg-desktop-portal-gnome` on GNOME. wGac uses the FileChooser portal for native open and save dialogs.
 
 Run applications from a Wayland desktop session with `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` available.
+
+wGac requires libdecor and a real runtime decoration plugin at startup; it stops with a diagnostic instead of silently accepting libdecor's undecorated fallback. To make repeated switches between GacUI custom frames and platform frames safe on every compositor, wGac forces libdecor to provide its client-side platform frame even when server-side decorations are available. This libdecor frame is the native platform frame from GacUI's perspective and is distinct from GacUI's custom window template.
 
 For maintenance work, keep the GacUI, Workflow, and Tools repositories beside wGac, or run `./syncOrg.sh`. `import.sh` reads GacUI framework snapshots, and `syncProj.sh` reads GacUI test resources and builds the Workflow and GacUI generators. The sibling Release repository is not a build or import dependency.
 
@@ -144,3 +147,5 @@ Follow [GacUI's native-renderer verification guide](../GacUI/DebugRemoteProtocol
 - The native FileChooser portal is implemented for open and save dialogs. Native color and font dialogs are not yet implemented.
 - Message boxes currently use the existing fallback behavior.
 - Wayland does not allow clients to position normal top-level windows globally; placement requests are compositor-dependent.
+- libdecor has no platform-frame window-icon API, so `IconVisible` is unsupported and always reports `false`.
+- libdecor cannot independently hide the maximize control. Its maximize affordance follows `SizeBox` (the frame's resize capability); `MaximizedBox` retains its requested value but cannot override that platform limitation.

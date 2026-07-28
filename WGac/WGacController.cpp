@@ -9,6 +9,7 @@
 #include "Services/WGacResourceService.h"
 #include "Services/WGacScreenService.h"
 #include "Wayland/WaylandDisplay.h"
+#include <stdexcept>
 
 namespace vl {
 namespace presentation {
@@ -44,9 +45,16 @@ public:
         , running(false)
     {
         display = new WaylandDisplay();
-        if (!display->Connect()) {
+        if (!display->Connect() || !display->GetLibdecorContext())
+        {
+            auto message = display->GetLastError();
             delete display;
             display = nullptr;
+            SetWaylandDisplay(nullptr);
+            throw std::runtime_error(
+                message.empty()
+                    ? "wGac initialization failed: the Wayland display or libdecor is unavailable."
+                    : "wGac initialization failed: " + message);
         }
         SetWaylandDisplay(display);
         clipboardService.Initialize();
@@ -56,12 +64,21 @@ public:
     ~WGacController()
     {
         inputService.StopTimer();
+
+        while (windows.Count() > 0)
+        {
+            DestroyNativeWindow(windows[windows.Count() - 1]);
+        }
+
         // Cleanup clipboard before disconnecting display
         clipboardService.Cleanup();
-        if (display) {
+        if (display)
+        {
             display->Disconnect();
-            delete display;
         }
+        SetWaylandDisplay(nullptr);
+        delete display;
+        display = nullptr;
     }
 
     WaylandDisplay* GetDisplay() { return display; }
@@ -96,20 +113,22 @@ public:
 
     const NativeWindowFrameConfig& GetNonMainWindowFrameConfig() override
     {
-        static const NativeWindowFrameConfig config = {
-            .MaximizedBoxOption = BoolOption::AlwaysFalse,
-            .MinimizedBoxOption = BoolOption::AlwaysFalse,
-            .CustomFrameEnabled = BoolOption::AlwaysTrue,
-        };
-        return config;
+        return NativeWindowFrameConfig::Default;
     }
 
     INativeWindow* CreateNativeWindow(INativeWindow::WindowMode mode) override
     {
         WGacNativeWindow* window = new WGacNativeWindow(display, mode);
         if (!window->Create()) {
+            auto message = display
+                ? display->GetLastError()
+                : std::string();
             delete window;
-            return nullptr;
+            throw std::runtime_error(
+                message.empty()
+                    ? "wGac failed to create a native Wayland window."
+                    : "wGac failed to create a native Wayland window: " +
+                        message);
         }
         callbackService.InvokeNativeWindowCreated(window);
         windows.Add(window);

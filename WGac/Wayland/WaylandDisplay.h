@@ -2,6 +2,7 @@
 #define WGAC_WAYLAND_DISPLAY_H
 
 #include <wayland-client.h>
+#include <libdecor.h>
 #include "../Protocol/xdg-shell-client-protocol.h"
 #include "../Protocol/xdg-decoration-unstable-v1-client-protocol.h"
 #include "../Protocol/text-input-unstable-v3-client-protocol.h"
@@ -36,11 +37,12 @@ private:
     zwp_text_input_manager_v3* text_input_manager = nullptr;
     wl_data_device_manager* data_device_manager = nullptr;
     wl_data_device* data_device = nullptr;
+    libdecor* libdecor_context = nullptr;
 
     int display_fd = -1;
     bool running = false;
     bool connected = false;
-    bool prefer_custom_frame_window = true;
+    std::string last_error;
 
     std::vector<uint32_t> shm_formats;
 
@@ -58,8 +60,6 @@ private:
     // Input seat
     WaylandSeat* wayland_seat = nullptr;
 
-    bool ProbeDecorationMode();
-
 public:
     // Wayland callback functions (must be public for C linkage)
     static void registry_global(void* data, wl_registry* registry,
@@ -74,6 +74,10 @@ public:
                             int32_t width, int32_t height, int32_t refresh);
     static void output_done(void* data, wl_output* output);
     static void output_scale(void* data, wl_output* output, int32_t factor);
+    static void libdecor_error(
+        libdecor* context,
+        libdecor_error error,
+        const char* message);
 
 public:
     WaylandDisplay();
@@ -84,7 +88,11 @@ public:
     bool IsConnected() const { return connected; }
 
     // Event loop
-    int GetFd() const { return display_fd; }
+    int GetFd() const {
+        return libdecor_context
+            ? libdecor_get_fd(libdecor_context)
+            : display_fd;
+    }
     int Dispatch();
     int DispatchPending();
     int DispatchWithTimeout(int milliseconds);
@@ -102,11 +110,13 @@ public:
     wl_seat* GetSeat() const { return seat; }
     xdg_wm_base* GetXdgWmBase() const { return xdg_wm_base_; }
     zxdg_decoration_manager_v1* GetDecorationManager() const { return decoration_manager; }
-    bool PreferCustomFrameWindow() const { return prefer_custom_frame_window; }
+    libdecor* GetLibdecorContext() const { return libdecor_context; }
     zwp_text_input_manager_v3* GetTextInputManager() const { return text_input_manager; }
     wl_data_device_manager* GetDataDeviceManager() const { return data_device_manager; }
     wl_data_device* GetDataDevice() const { return data_device; }
     WaylandSeat* GetWaylandSeat() const { return wayland_seat; }
+    const std::string& GetLastError() const { return last_error; }
+    void ReportError(const std::string& message);
 
     // Format support
     bool HasShmFormat(uint32_t format) const;

@@ -1,6 +1,7 @@
 #include "WGacNativeWindow.h"
 #include "WGacGacView.h"
 #include <cstring>
+#include <stdexcept>
 
 namespace vl {
 namespace presentation {
@@ -11,15 +12,11 @@ namespace {
         .configure = WGacNativeWindow::xdg_surface_configure,
     };
 
-    const xdg_toplevel_listener xdg_toplevel_listener_ = {
-        .configure = WGacNativeWindow::xdg_toplevel_configure,
-        .close = WGacNativeWindow::xdg_toplevel_close,
-        .configure_bounds = WGacNativeWindow::xdg_toplevel_configure_bounds,
-        .wm_capabilities = WGacNativeWindow::xdg_toplevel_wm_capabilities,
-    };
-
-    const zxdg_toplevel_decoration_v1_listener xdg_toplevel_decoration_listener_ = {
-        .configure = WGacNativeWindow::xdg_toplevel_decoration_configure,
+    libdecor_frame_interface libdecor_frame_interface_ = {
+        .configure = WGacNativeWindow::libdecor_frame_configure,
+        .close = WGacNativeWindow::libdecor_frame_close,
+        .commit = WGacNativeWindow::libdecor_frame_commit,
+        .dismiss_popup = WGacNativeWindow::libdecor_frame_dismiss_popup,
     };
 
     const xdg_popup_listener xdg_popup_listener_ = {
@@ -40,19 +37,21 @@ WGacNativeWindow::WGacNativeWindow(WaylandDisplay* _display, INativeWindow::Wind
     : display(_display)
     , surface(nullptr)
     , xdgSurface(nullptr)
-    , toplevel(nullptr)
     , popup(nullptr)
-    , decoration(nullptr)
+    , libdecorFrame(nullptr)
     , frameCallback(nullptr)
     , popupSyncCallback(nullptr)
     , bufferPool(nullptr)
     , view(nullptr)
     , parentWindow(nullptr)
+    , popupGrabParent(nullptr)
     , cursor(nullptr)
     , graphicsHandler(nullptr)
     , mode(_mode)
     , currentWidth(800)
     , currentHeight(600)
+    , lastFloatingWidth(800)
+    , lastFloatingHeight(600)
     , minWidth(0)
     , minHeight(0)
     , posX(0)
@@ -63,20 +62,22 @@ WGacNativeWindow::WGacNativeWindow(WaylandDisplay* _display, INativeWindow::Wind
     , closed(false)
     , pendingFrame(false)
     , hasFirstFrame(false)
-    , customFrameMode(!_display || _display->PreferCustomFrameWindow())
+    , libdecorStateInitialized(false)
+    , customFrameMode(false)
     , enabled(true)
     , capturing(false)
     , border(true)
     , sizeBox(true)
     , topMost(false)
     , titleBar(true)
-    , iconVisible(true)
+    , iconVisible(false)
     , maximizedBox(true)
     , minimizedBox(true)
     , sizeState(WindowSizeState::Restored)
     , caretPoint(0, 0)
     , textInputEnabled(false)
     , hasKeyboardFocus(false)
+    , popupActivationSerial(0)
 {
 }
 
@@ -87,23 +88,10 @@ WGacNativeWindow::~WGacNativeWindow()
 
 bool WGacNativeWindow::Create()
 {
-    if (surface) return false;
+    if (surface || !display || !display->GetLibdecorContext()) return false;
 
     surface = wl_compositor_create_surface(display->GetCompositor());
     if (!surface) return false;
-
-    // For popup/tooltip/menu windows, delay xdg_surface creation until Show()
-    // because we need parent and position information first
-    bool isPopup = (mode == WindowMode::Popup || mode == WindowMode::Tooltip || mode == WindowMode::Menu);
-
-    if (!isPopup) {
-        // Create xdg_surface and toplevel immediately for normal windows
-        if (!CreateXdgSurface()) {
-            wl_surface_destroy(surface);
-            surface = nullptr;
-            return false;
-        }
-    }
 
     // Get scale factor from display
     int32_t scale = display->GetOutputScale();
@@ -123,17 +111,377 @@ bool WGacNativeWindow::Create()
     view = new WGacView(this, bufferPool);
     display->RegisterWindow(this);
 
-    // Only commit for normal windows; popups commit in Show()
-    if (!isPopup) {
-        wl_surface_commit(surface);
+    // Popup/tooltip/menu roles are delayed until Show(), because they require
+    // final parent and position information. Libdecor owns every normal role.
+    if (!IsPopupMode() && !CreateLibdecorFrame()) {
+        Destroy();
+        return false;
     }
 
     return true;
 }
 
+bool WGacNativeWindow::IsPopupMode() const
+{
+    return mode == WindowMode::Popup ||
+        mode == WindowMode::Tooltip ||
+        mode == WindowMode::Menu;
+}
+
+xdg_surface* WGacNativeWindow::GetXdgSurface() const
+{
+    return libdecorFrame
+        ? libdecor_frame_get_xdg_surface(libdecorFrame)
+        : xdgSurface;
+}
+
+xdg_toplevel* WGacNativeWindow::GetXdgToplevel() const
+{
+    return libdecorFrame
+        ? libdecor_frame_get_xdg_toplevel(libdecorFrame)
+        : nullptr;
+}
+
+bool WGacNativeWindow::CreateLibdecorFrame()
+{
+    if (IsPopupMode() || libdecorFrame)
+    {
+        return !IsPopupMode();
+    }
+
+    auto context = display ? display->GetLibdecorContext() : nullptr;
+    if (!context)
+    {
+        if (display)
+        {
+            display->ReportError("A normal window requires a libdecor context.");
+        }
+        return false;
+    }
+
+    libdecorFrame = libdecor_decorate(
+        context,
+        surface,
+        &libdecor_frame_interface_,
+        this);
+    if (!libdecorFrame)
+    {
+        display->ReportError("libdecor failed to create a platform frame.");
+        return false;
+    }
+
+    AString aTitle = title.Length() > 0
+        ? wtoa(title)
+        : AString::Unmanaged("GacUI Window");
+    libdecor_frame_set_title(libdecorFrame, aTitle.Buffer());
+    libdecor_frame_set_app_id(libdecorFrame, "gacui");
+    UpdateNativeParent();
+    UpdatePlatformFrame(false);
+
+    // libdecor 0.2.2 commits visibility changes with its current content
+    // dimensions, even before the first configure. Seed a positive state so a
+    // custom/borderless window cannot emit invalid 0x0 window geometry.
+    auto initialState = libdecor_state_new(
+        lastFloatingWidth > 0 ? lastFloatingWidth : 1,
+        lastFloatingHeight > 0 ? lastFloatingHeight : 1);
+    if (!initialState)
+    {
+        display->ReportError(
+            "libdecor failed to allocate the initial platform-frame state.");
+        DestroyLibdecorFrame();
+        return false;
+    }
+    ::libdecor_frame_commit(libdecorFrame, initialState, nullptr);
+    libdecor_state_free(initialState);
+    libdecorStateInitialized = true;
+
+    // libdecor silently falls back to an undecorated implementation when no
+    // usable runtime plugin is selected. With forced CSD, a real platform
+    // plugin must translate content origin below a non-zero title bar.
+    int frameX = 0;
+    int frameY = 0;
+    libdecor_frame_translate_coordinate(
+        libdecorFrame,
+        0,
+        0,
+        &frameX,
+        &frameY);
+    if (frameY <= 0)
+    {
+        display->ReportError(
+            "The selected libdecor runtime plugin does not provide a "
+            "platform frame. Install libdecor-0-plugin-1-gtk or another "
+            "functional libdecor plugin.");
+        DestroyLibdecorFrame();
+        return false;
+    }
+
+    UpdatePlatformFrame(false);
+    return true;
+}
+
+void WGacNativeWindow::DestroyLibdecorFrame()
+{
+    if (!libdecorFrame)
+    {
+        return;
+    }
+
+    libdecor_frame_unref(libdecorFrame);
+    libdecorFrame = nullptr;
+    configured = false;
+    libdecorStateInitialized = false;
+}
+
+void WGacNativeWindow::UpdatePlatformFrame(bool commitState)
+{
+    if (!libdecorFrame)
+    {
+        return;
+    }
+
+    libdecor_frame_set_capabilities(
+        libdecorFrame,
+        static_cast<libdecor_capabilities>(
+            LIBDECOR_ACTION_MOVE |
+            LIBDECOR_ACTION_CLOSE |
+            LIBDECOR_ACTION_FULLSCREEN));
+
+    if (sizeBox)
+    {
+        if (!libdecor_frame_has_capability(
+            libdecorFrame,
+            LIBDECOR_ACTION_RESIZE))
+        {
+            libdecor_frame_set_capabilities(
+                libdecorFrame,
+                LIBDECOR_ACTION_RESIZE);
+        }
+        libdecor_frame_set_min_content_size(
+            libdecorFrame,
+            minWidth,
+            minHeight);
+        libdecor_frame_set_max_content_size(
+            libdecorFrame,
+            0,
+            0);
+    }
+    else
+    {
+        if (libdecor_frame_has_capability(
+                libdecorFrame,
+                LIBDECOR_ACTION_RESIZE))
+        {
+            // Preserve the user constraints that libdecor restores when
+            // resize capability is enabled again.
+            libdecor_frame_set_min_content_size(
+                libdecorFrame,
+                minWidth,
+                minHeight);
+            libdecor_frame_set_max_content_size(
+                libdecorFrame,
+                0,
+                0);
+            libdecor_frame_unset_capabilities(
+                libdecorFrame,
+                LIBDECOR_ACTION_RESIZE);
+        }
+        if (!libdecor_frame_has_capability(
+            libdecorFrame,
+            LIBDECOR_ACTION_RESIZE))
+        {
+            // Never replace the floating fixed size with maximized,
+            // fullscreen, or tiled configure dimensions.
+            libdecor_frame_set_min_content_size(
+                libdecorFrame,
+                lastFloatingWidth,
+                lastFloatingHeight);
+            libdecor_frame_set_max_content_size(
+                libdecorFrame,
+                lastFloatingWidth,
+                lastFloatingHeight);
+        }
+    }
+
+    if (minimizedBox)
+    {
+        libdecor_frame_set_capabilities(
+            libdecorFrame,
+            LIBDECOR_ACTION_MINIMIZE);
+    }
+    else
+    {
+        libdecor_frame_unset_capabilities(
+            libdecorFrame,
+            LIBDECOR_ACTION_MINIMIZE);
+    }
+
+    const bool hasContentState = libdecorStateInitialized;
+    if (commitState && hasContentState)
+    {
+        CommitRequestedSize();
+    }
+
+    if (hasContentState)
+    {
+        const bool showPlatformFrame =
+            !customFrameMode &&
+            border &&
+            titleBar;
+        if (libdecor_frame_is_visible(libdecorFrame) != showPlatformFrame)
+        {
+            libdecor_frame_set_visibility(
+                libdecorFrame,
+                showPlatformFrame);
+        }
+    }
+}
+
+void WGacNativeWindow::UpdateNativeParent()
+{
+    auto childToplevel = GetXdgToplevel();
+    if (!libdecorFrame || !childToplevel)
+    {
+        return;
+    }
+
+    if (parentWindow &&
+        parentWindow->libdecorFrame &&
+        parentWindow->GetXdgToplevel())
+    {
+        libdecor_frame_set_parent(
+            libdecorFrame,
+            parentWindow->libdecorFrame);
+    }
+    else
+    {
+        // libdecor 0.2.2 dereferences a null parent. Use its xdg getter for
+        // the supported protocol operation when clearing the relationship.
+        xdg_toplevel_set_parent(childToplevel, nullptr);
+    }
+}
+
+void WGacNativeWindow::CommitRequestedSize()
+{
+    if (!libdecorFrame || !configured ||
+        !libdecor_frame_is_floating(libdecorFrame) ||
+        currentWidth <= 0 || currentHeight <= 0)
+    {
+        return;
+    }
+
+    auto state = libdecor_state_new(currentWidth, currentHeight);
+    if (!state)
+    {
+        display->ReportError("libdecor failed to allocate a window state.");
+        return;
+    }
+
+    ::libdecor_frame_commit(libdecorFrame, state, nullptr);
+    libdecor_state_free(state);
+    wl_surface_commit(surface);
+}
+
+void WGacNativeWindow::ResizeBufferForCurrentSize()
+{
+    if (!bufferPool || currentWidth <= 0 || currentHeight <= 0)
+    {
+        return;
+    }
+
+    int32_t scale = display->GetOutputScale();
+    if (scale < 1)
+    {
+        scale = 1;
+    }
+
+    const uint32_t scaledWidth =
+        static_cast<uint32_t>(currentWidth * scale);
+    const uint32_t scaledHeight =
+        static_cast<uint32_t>(currentHeight * scale);
+    if (bufferPool->GetWidth() != scaledWidth ||
+        bufferPool->GetHeight() != scaledHeight)
+    {
+        bufferPool->Resize(scaledWidth, scaledHeight);
+    }
+    if (surface && currentBufferScale != scale)
+    {
+        currentBufferScale = scale;
+        wl_surface_set_buffer_scale(surface, scale);
+    }
+}
+
+void WGacNativeWindow::ReleasePopupGrab()
+{
+    if (!popupGrabParent)
+    {
+        return;
+    }
+
+    auto seat = display ? display->GetWaylandSeat() : nullptr;
+    if (seat && !seat->GetName().empty() && popupGrabParent->libdecorFrame)
+    {
+        libdecor_frame_popup_ungrab(
+            popupGrabParent->libdecorFrame,
+            seat->GetName().c_str());
+    }
+    popupGrabParent = nullptr;
+}
+
+void WGacNativeWindow::DismissPopupChildren()
+{
+    while (true)
+    {
+        WGacNativeWindow* child = nullptr;
+        for (vint i = childWindows.Count() - 1; i >= 0; i--)
+        {
+            auto candidate = childWindows[i];
+            if (candidate &&
+                candidate->IsPopupMode() &&
+                (candidate->visible ||
+                 candidate->popup ||
+                 candidate->xdgSurface ||
+                 candidate->popupSyncCallback))
+            {
+                child = candidate;
+                break;
+            }
+        }
+        if (!child)
+        {
+            break;
+        }
+
+        if (child->visible)
+        {
+            child->Hide(true);
+        }
+        else
+        {
+            child->Hide(false);
+        }
+
+        // An ancestor popup role cannot legally disappear while a descendant
+        // remains topmost. If application code cancelled the close, force only
+        // the native role teardown needed to preserve xdg-shell ordering.
+        if (childWindows.Contains(child) &&
+            (child->visible ||
+             child->popup ||
+             child->xdgSurface ||
+             child->popupSyncCallback))
+        {
+            child->Hide(false);
+        }
+    }
+}
+
 bool WGacNativeWindow::CreateXdgSurface()
 {
-    if (xdgSurface) return true;  // Already created
+    if (xdgSurface) return true;
+    if (!IsPopupMode() || !parentWindow)
+    {
+        return false;
+    }
 
     xdgSurface = xdg_wm_base_get_xdg_surface(display->GetXdgWmBase(), surface);
     if (!xdgSurface) {
@@ -141,93 +489,95 @@ bool WGacNativeWindow::CreateXdgSurface()
     }
     xdg_surface_add_listener(xdgSurface, &xdg_surface_listener_, this);
 
-    bool isPopup = (mode == WindowMode::Popup || mode == WindowMode::Tooltip || mode == WindowMode::Menu);
+    auto parentXdgSurface = parentWindow->GetXdgSurface();
+    if (!parentXdgSurface)
+    {
+        xdg_surface_destroy(xdgSurface);
+        xdgSurface = nullptr;
+        return false;
+    }
 
-    if (isPopup && parentWindow && parentWindow->xdgSurface) {
-        // Create popup window
-        xdg_positioner* positioner = xdg_wm_base_create_positioner(display->GetXdgWmBase());
-        if (!positioner) {
-            xdg_surface_destroy(xdgSurface);
-            xdgSurface = nullptr;
-            return false;
-        }
+    xdg_positioner* positioner =
+        xdg_wm_base_create_positioner(display->GetXdgWmBase());
+    if (!positioner) {
+        xdg_surface_destroy(xdgSurface);
+        xdgSurface = nullptr;
+        return false;
+    }
 
-        // Calculate position relative to parent
-        int32_t relativeX, relativeY;
-        bool parentIsPopup = (parentWindow->mode == WindowMode::Popup ||
-                              parentWindow->mode == WindowMode::Tooltip ||
-                              parentWindow->mode == WindowMode::Menu);
-        if (parentIsPopup) {
-            // Parent is a popup - GacUI gives coordinates relative to the popup
-            relativeX = posX;
-            relativeY = posY;
-        } else {
-            // Parent is main window - GacUI gives screen coordinates
-            relativeX = posX - parentWindow->posX;
-            relativeY = posY - parentWindow->posY;
-        }
-
-        // Set popup size
-        xdg_positioner_set_size(positioner, currentWidth > 0 ? currentWidth : 100, currentHeight > 0 ? currentHeight : 100);
-        // Set anchor rectangle (position relative to parent)
-        xdg_positioner_set_anchor_rect(positioner, relativeX, relativeY, 1, 1);
-        // Anchor to top-left of the anchor rect
-        xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
-        // Gravity: popup expands to bottom-right
-        xdg_positioner_set_gravity(positioner, XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
-        // Allow compositor to adjust position if popup would be outside screen
-        xdg_positioner_set_constraint_adjustment(positioner,
-            XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X |
-            XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y |
-            XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X |
-            XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y);
-
-        popup = xdg_surface_get_popup(xdgSurface, parentWindow->xdgSurface, positioner);
-        xdg_positioner_destroy(positioner);
-
-        if (!popup) {
-            xdg_surface_destroy(xdgSurface);
-            xdgSurface = nullptr;
-            return false;
-        }
-        xdg_popup_add_listener(popup, &xdg_popup_listener_, this);
-
-        // Grab the popup so it receives input events and doesn't dismiss immediately
-        WaylandSeat* seat = display->GetWaylandSeat();
-        if (seat && seat->GetSeat()) {
-            xdg_popup_grab(popup, seat->GetSeat(), seat->GetLastPointerSerial());
-        }
+    // GacUI stores normal-window popup positions in content coordinates.
+    // xdg_positioner uses parent window-geometry coordinates, so include the
+    // platform frame offset supplied by libdecor.
+    int32_t relativeX;
+    int32_t relativeY;
+    if (parentWindow->IsPopupMode()) {
+        relativeX = posX;
+        relativeY = posY;
     } else {
-        // Create toplevel window
-        toplevel = xdg_surface_get_toplevel(xdgSurface);
-        if (!toplevel) {
-            xdg_surface_destroy(xdgSurface);
-            xdgSurface = nullptr;
-            return false;
+        relativeX = posX - parentWindow->posX;
+        relativeY = posY - parentWindow->posY;
+        if (parentWindow->libdecorFrame)
+        {
+            libdecor_frame_translate_coordinate(
+                parentWindow->libdecorFrame,
+                relativeX,
+                relativeY,
+                &relativeX,
+                &relativeY);
         }
-        xdg_toplevel_add_listener(toplevel, &xdg_toplevel_listener_, this);
+    }
 
-        if (parentWindow && parentWindow->toplevel) {
-            xdg_toplevel_set_parent(toplevel, parentWindow->toplevel);
-        }
+    xdg_positioner_set_size(
+        positioner,
+        currentWidth > 0 ? currentWidth : 100,
+        currentHeight > 0 ? currentHeight : 100);
+    xdg_positioner_set_anchor_rect(
+        positioner,
+        relativeX,
+        relativeY,
+        1,
+        1);
+    xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
+    xdg_positioner_set_gravity(positioner, XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
+    xdg_positioner_set_constraint_adjustment(
+        positioner,
+        XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X |
+        XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y |
+        XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X |
+        XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y);
 
-        xdg_toplevel_set_title(toplevel, "GacUI Window");
-        xdg_toplevel_set_app_id(toplevel, "gacui");
+    popup = xdg_surface_get_popup(
+        xdgSurface,
+        parentXdgSurface,
+        positioner);
+    xdg_positioner_destroy(positioner);
 
-        if (display->GetDecorationManager()) {
-            decoration = zxdg_decoration_manager_v1_get_toplevel_decoration(
-                display->GetDecorationManager(), toplevel);
-            if (decoration) {
-                zxdg_toplevel_decoration_v1_add_listener(
-                    decoration,
-                    &xdg_toplevel_decoration_listener_,
-                    this);
-                zxdg_toplevel_decoration_v1_set_mode(
-                    decoration,
-                    customFrameMode
-                        ? ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE
-                        : ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
-            }
+    if (!popup) {
+        xdg_surface_destroy(xdgSurface);
+        xdgSurface = nullptr;
+        return false;
+    }
+    xdg_popup_add_listener(popup, &xdg_popup_listener_, this);
+
+    // Tell both xdg-shell and libdecor about a genuine input-triggered popup
+    // grab so a click on the platform frame dismisses the chain correctly.
+    // Tooltips are never grabbing popups.
+    WaylandSeat* seat = display->GetWaylandSeat();
+    if (mode != WindowMode::Tooltip &&
+        popupActivationSerial != 0 &&
+        seat &&
+        seat->GetSeat())
+    {
+        xdg_popup_grab(
+            popup,
+            seat->GetSeat(),
+            popupActivationSerial);
+        if (parentWindow->libdecorFrame && !seat->GetName().empty())
+        {
+            libdecor_frame_popup_grab(
+                parentWindow->libdecorFrame,
+                seat->GetName().c_str());
+            popupGrabParent = parentWindow;
         }
     }
 
@@ -236,6 +586,14 @@ bool WGacNativeWindow::CreateXdgSurface()
 
 void WGacNativeWindow::Destroy()
 {
+    DismissPopupChildren();
+    while (childWindows.Count() > 0)
+    {
+        childWindows[childWindows.Count() - 1]->SetParent(nullptr);
+    }
+    ReleasePopupGrab();
+    SetParent(nullptr);
+
     // Clear any seat focus references to this window before destroying
     // This prevents dangling pointer issues when compositor sends events
     if (display && display->GetWaylandSeat()) {
@@ -251,15 +609,9 @@ void WGacNativeWindow::Destroy()
         frameCallback = nullptr;
     }
 
-    delete view;
-    view = nullptr;
-
-    delete bufferPool;
-    bufferPool = nullptr;
-
-    if (decoration) {
-        zxdg_toplevel_decoration_v1_destroy(decoration);
-        decoration = nullptr;
+    if (popupSyncCallback) {
+        wl_callback_destroy(popupSyncCallback);
+        popupSyncCallback = nullptr;
     }
 
     if (popup) {
@@ -267,15 +619,18 @@ void WGacNativeWindow::Destroy()
         popup = nullptr;
     }
 
-    if (toplevel) {
-        xdg_toplevel_destroy(toplevel);
-        toplevel = nullptr;
-    }
+    DestroyLibdecorFrame();
 
     if (xdgSurface) {
         xdg_surface_destroy(xdgSurface);
         xdgSurface = nullptr;
     }
+
+    delete view;
+    view = nullptr;
+
+    delete bufferPool;
+    bufferPool = nullptr;
 
     if (surface) {
         wl_surface_destroy(surface);
@@ -354,74 +709,144 @@ void WGacNativeWindow::xdg_surface_configure(void* data, xdg_surface* xdg_surfac
     }
 }
 
-void WGacNativeWindow::xdg_toplevel_configure(void* data, xdg_toplevel* /*toplevel*/,
-                                               int32_t width, int32_t height, wl_array* states)
+void WGacNativeWindow::libdecor_frame_configure(
+    libdecor_frame* frame,
+    libdecor_configuration* configuration,
+    void* data)
 {
     auto* self = static_cast<WGacNativeWindow*>(data);
-
-    self->sizeState = WindowSizeState::Restored;
-    auto* statePtr = static_cast<uint32_t*>(states->data);
-    size_t numStates = states->size / sizeof(uint32_t);
-    for (size_t i = 0; i < numStates; ++i) {
-        switch (statePtr[i]) {
-            case XDG_TOPLEVEL_STATE_MAXIMIZED:
-                self->sizeState = WindowSizeState::Maximized;
-                break;
-            case XDG_TOPLEVEL_STATE_FULLSCREEN:
-                self->sizeState = WindowSizeState::Maximized;
-                break;
-            default:
-                break;
-        }
-    }
-
-    if (width > 0 && height > 0) {
-        // Clamp to minimum size (some compositors don't enforce min_size during resize)
-        if (self->minWidth > 0 && width < self->minWidth) {
-            width = self->minWidth;
-        }
-        if (self->minHeight > 0 && height < self->minHeight) {
-            height = self->minHeight;
-        }
-        self->currentWidth = width;
-        self->currentHeight = height;
-    }
-}
-
-void WGacNativeWindow::xdg_toplevel_close(void* data, xdg_toplevel* /*toplevel*/)
-{
-    auto* self = static_cast<WGacNativeWindow*>(data);
-    self->RequestClose();
-}
-
-void WGacNativeWindow::xdg_toplevel_configure_bounds(void* /*data*/, xdg_toplevel* /*toplevel*/,
-                                                      int32_t /*width*/, int32_t /*height*/)
-{
-}
-
-void WGacNativeWindow::xdg_toplevel_wm_capabilities(void* /*data*/, xdg_toplevel* /*toplevel*/,
-                                                     wl_array* /*capabilities*/)
-{
-}
-
-void WGacNativeWindow::xdg_toplevel_decoration_configure(
-    void* data,
-    zxdg_toplevel_decoration_v1* decoration,
-    uint32_t mode)
-{
-    auto* self = static_cast<WGacNativeWindow*>(data);
-    if (decoration != self->decoration)
+    if (frame != self->libdecorFrame)
     {
         return;
     }
 
-    if (mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE)
+    libdecor_window_state windowState = LIBDECOR_WINDOW_STATE_NONE;
+    libdecor_configuration_get_window_state(configuration, &windowState);
+    const bool floatingConfiguration =
+        (windowState &
+            (LIBDECOR_WINDOW_STATE_MAXIMIZED |
+             LIBDECOR_WINDOW_STATE_FULLSCREEN |
+             LIBDECOR_WINDOW_STATE_TILED_LEFT |
+             LIBDECOR_WINDOW_STATE_TILED_RIGHT |
+             LIBDECOR_WINDOW_STATE_TILED_TOP |
+             LIBDECOR_WINDOW_STATE_TILED_BOTTOM)) == 0;
+
+    // A fresh floating role is allowed to configure without suggesting a
+    // content size. This also happens after hiding a maximized window and
+    // showing it restored, where currentWidth/currentHeight still describe
+    // the old maximized configure. Seed the new floating configure from the
+    // preserved floating size instead.
+    int width = floatingConfiguration
+        ? self->lastFloatingWidth
+        : self->currentWidth;
+    int height = floatingConfiguration
+        ? self->lastFloatingHeight
+        : self->currentHeight;
+    int configuredWidth = 0;
+    int configuredHeight = 0;
+    if (libdecor_configuration_get_content_size(
+        configuration,
+        frame,
+        &configuredWidth,
+        &configuredHeight))
     {
-        self->customFrameMode = true;
+        if (configuredWidth > 0)
+        {
+            width = configuredWidth;
+        }
+        if (configuredHeight > 0)
+        {
+            height = configuredHeight;
+        }
     }
-    else if (mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE)
+
+    self->sizeState = WindowSizeState::Restored;
+    if (windowState &
+        (LIBDECOR_WINDOW_STATE_MAXIMIZED |
+         LIBDECOR_WINDOW_STATE_FULLSCREEN))
     {
-        self->customFrameMode = false;
+        self->sizeState = WindowSizeState::Maximized;
+    }
+
+    auto state = libdecor_state_new(width, height);
+    if (!state)
+    {
+        self->display->ReportError(
+            "libdecor failed to allocate a configured window state.");
+        return;
+    }
+
+    ::libdecor_frame_commit(frame, state, configuration);
+    libdecor_state_free(state);
+    wl_surface_commit(self->surface);
+
+    const bool firstConfigure = !self->configured;
+    const bool sizeChanged =
+        self->currentWidth != width ||
+        self->currentHeight != height;
+    self->currentWidth = width;
+    self->currentHeight = height;
+    self->configured = true;
+    if (libdecor_frame_is_floating(frame))
+    {
+        self->lastFloatingWidth = width;
+        self->lastFloatingHeight = height;
+    }
+    self->ResizeBufferForCurrentSize();
+    self->UpdateNativeParent();
+    self->UpdatePlatformFrame(false);
+
+    for (vint i = 0; i < self->childWindows.Count(); i++)
+    {
+        self->childWindows[i]->UpdateNativeParent();
+    }
+
+    if (sizeChanged)
+    {
+        for (vint i = 0; i < self->listeners.Count(); i++)
+        {
+            self->listeners[i]->Moved();
+        }
+    }
+
+    if (firstConfigure && self->visible)
+    {
+        if (self->pendingFrame)
+        {
+            self->pendingFrame = false;
+            self->hasFirstFrame = false;
+        }
+        self->RequestFrame();
+    }
+}
+
+void WGacNativeWindow::libdecor_frame_close(libdecor_frame* frame, void* data)
+{
+    auto* self = static_cast<WGacNativeWindow*>(data);
+    if (frame == self->libdecorFrame)
+    {
+        self->RequestClose();
+    }
+}
+
+void WGacNativeWindow::libdecor_frame_commit(libdecor_frame* frame, void* data)
+{
+    auto* self = static_cast<WGacNativeWindow*>(data);
+    if (frame == self->libdecorFrame && self->surface)
+    {
+        wl_surface_commit(self->surface);
+    }
+}
+
+void WGacNativeWindow::libdecor_frame_dismiss_popup(
+    libdecor_frame* frame,
+    const char*,
+    void* data)
+{
+    auto* self = static_cast<WGacNativeWindow*>(data);
+    if (frame == self->libdecorFrame)
+    {
+        self->DismissPopupChildren();
     }
 }
 
@@ -443,6 +868,7 @@ void WGacNativeWindow::xdg_popup_done(void* data, xdg_popup* /*popup*/)
 {
     auto* self = static_cast<WGacNativeWindow*>(data);
     // Popup was dismissed (e.g., user clicked outside)
+    self->DismissPopupChildren();
 
     // Save parent reference before clearing focus
     auto* parent = self->parentWindow;
@@ -464,6 +890,8 @@ void WGacNativeWindow::xdg_popup_done(void* data, xdg_popup* /*popup*/)
         self->frameCallback = nullptr;
     }
     self->pendingFrame = false;
+    self->ReleasePopupGrab();
+    self->popupActivationSerial = 0;
     if (self->popup) {
         xdg_popup_destroy(self->popup);
         self->popup = nullptr;
@@ -573,14 +1001,19 @@ void WGacNativeWindow::SetBounds(const NativeRect& bounds) {
     int32_t newWidth = bounds.Width().value;
     int32_t newHeight = bounds.Height().value;
 
-    if (newWidth != currentWidth || newHeight != currentHeight) {
+    const bool canApplySize =
+        !libdecorFrame ||
+        !configured ||
+        libdecor_frame_is_floating(libdecorFrame);
+    if (canApplySize &&
+        (newWidth != currentWidth || newHeight != currentHeight))
+    {
         currentWidth = newWidth;
         currentHeight = newHeight;
-        if (bufferPool) {
-            int32_t scale = display->GetOutputScale();
-            if (scale < 1) scale = 1;
-            bufferPool->Resize(currentWidth * scale, currentHeight * scale);
-        }
+        lastFloatingWidth = newWidth;
+        lastFloatingHeight = newHeight;
+        ResizeBufferForCurrentSize();
+        UpdatePlatformFrame();
     }
     for (vint i = 0; i < listeners.Count(); i++) { listeners[i]->Moved(); }
 }
@@ -591,15 +1024,24 @@ NativeSize WGacNativeWindow::GetClientSize() {
     return NativeSize(w, h);
 }
 void WGacNativeWindow::SetClientSize(NativeSize size) {
-    currentWidth = size.x.value;
-    currentHeight = size.y.value;
-    if (bufferPool) bufferPool->Resize(currentWidth, currentHeight);
+    const bool canApplySize =
+        !libdecorFrame ||
+        !configured ||
+        libdecor_frame_is_floating(libdecorFrame);
+    if (canApplySize)
+    {
+        currentWidth = size.x.value;
+        currentHeight = size.y.value;
+        lastFloatingWidth = currentWidth;
+        lastFloatingHeight = currentHeight;
+        ResizeBufferForCurrentSize();
+        UpdatePlatformFrame();
+    }
     for (vint i = 0; i < listeners.Count(); i++) { listeners[i]->Moved(); }
 }
 NativeRect WGacNativeWindow::GetClientBoundsInScreen() {
     // For popup windows, return bounds relative to self (0,0) since rendering is in window-local coords
-    bool isPopup = (mode == WindowMode::Popup || mode == WindowMode::Tooltip || mode == WindowMode::Menu);
-    if (isPopup) {
+    if (IsPopupMode()) {
         return NativeRect(0, 0, currentWidth, currentHeight);
     }
     return NativeRect(posX, posY, posX + currentWidth, posY + currentHeight);
@@ -608,17 +1050,19 @@ NativeRect WGacNativeWindow::GetClientBoundsInScreen() {
 void WGacNativeWindow::SuggestMinClientSize(NativeSize size) {
     minWidth = size.x.value;
     minHeight = size.y.value;
-    if (toplevel && minWidth > 0 && minHeight > 0) {
-        xdg_toplevel_set_min_size(toplevel, minWidth, minHeight);
-    }
+    UpdatePlatformFrame();
 }
 
 WString WGacNativeWindow::GetTitle() { return title; }
 void WGacNativeWindow::SetTitle(const WString& _title) {
     title = _title;
-    if (toplevel) {
+    if (libdecorFrame) {
         AString aTitle = wtoa(title);
-        xdg_toplevel_set_title(toplevel, aTitle.Buffer());
+        libdecor_frame_set_title(libdecorFrame, aTitle.Buffer());
+        if (configured && surface)
+        {
+            wl_surface_commit(surface);
+        }
     }
 }
 
@@ -633,32 +1077,36 @@ void WGacNativeWindow::SetCaretPoint(NativePoint point) {
 
 INativeWindow* WGacNativeWindow::GetParent() { return parentWindow; }
 void WGacNativeWindow::SetParent(INativeWindow* parent) {
-    parentWindow = dynamic_cast<WGacNativeWindow*>(parent);
-    if (toplevel) {
-        xdg_toplevel_set_parent(toplevel, parentWindow ? parentWindow->toplevel : nullptr);
+    auto newParent = dynamic_cast<WGacNativeWindow*>(parent);
+    if (parentWindow == newParent)
+    {
+        UpdateNativeParent();
+        return;
+    }
+
+    if (parentWindow && parentWindow->childWindows.Contains(this))
+    {
+        parentWindow->childWindows.Remove(this);
+    }
+    parentWindow = newParent;
+    if (parentWindow && !parentWindow->childWindows.Contains(this))
+    {
+        parentWindow->childWindows.Add(this);
+    }
+    UpdateNativeParent();
+    if (configured && surface)
+    {
+        wl_surface_commit(surface);
     }
 }
 INativeWindow::WindowMode WGacNativeWindow::GetWindowMode() { return mode; }
 void WGacNativeWindow::EnableCustomFrameMode() {
     customFrameMode = true;
-    if (decoration) {
-        zxdg_toplevel_decoration_v1_set_mode(
-            decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
-    }
+    UpdatePlatformFrame();
 }
 void WGacNativeWindow::DisableCustomFrameMode() {
-    // A compositor without xdg-decoration cannot provide a native frame.
-    // Keep reporting custom-frame mode so GacUI knows that it must draw one.
-    if (!display || !display->GetDecorationManager()) {
-        customFrameMode = true;
-        return;
-    }
-
     customFrameMode = false;
-    if (decoration) {
-        zxdg_toplevel_decoration_v1_set_mode(
-            decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
-    }
+    UpdatePlatformFrame();
 }
 bool WGacNativeWindow::IsCustomFrameModeEnabled() { return customFrameMode; }
 NativeMargin WGacNativeWindow::GetCustomFramePadding() { return sizeBox || titleBar ? NativeMargin(5, 5, 5, 5) : NativeMargin(0, 0, 0, 0); }
@@ -672,23 +1120,49 @@ void WGacNativeWindow::Show() {
     closed = false;
     visible = true;
 
-    bool isPopup = (mode == WindowMode::Popup || mode == WindowMode::Tooltip || mode == WindowMode::Menu);
-
-    // Recreate xdg_surface if it was destroyed by Hide()
-    if (!xdgSurface) {
-        if (isPopup && !popupSyncCallback) {
-            // For popup windows, delay creation using sync callback to let SetBounds complete
-            popupSyncCallback = wl_display_sync(display->GetDisplay());
-            wl_callback_add_listener(popupSyncCallback, &popup_sync_listener, this);
-            // Don't call Opened() yet - wait for popup to be created
-            return;
-        } else if (!isPopup) {
-            // For normal windows, recreate the xdg_surface and toplevel
-            if (!CreateXdgSurface()) {
-                return;
-            }
-            wl_surface_commit(surface);
+    if (IsPopupMode())
+    {
+        auto seat = display ? display->GetWaylandSeat() : nullptr;
+        popupActivationSerial = seat
+            ? seat->GetCurrentInputSerial()
+            : 0;
+        if (popupActivationSerial == 0 &&
+            parentWindow &&
+            parentWindow->IsPopupMode())
+        {
+            popupActivationSerial = parentWindow->popupActivationSerial;
         }
+        if (!xdgSurface) {
+            if (!popupSyncCallback)
+            {
+                // Delay creation using a sync callback so SetBounds can finish.
+                popupSyncCallback = wl_display_sync(display->GetDisplay());
+                wl_callback_add_listener(
+                    popupSyncCallback,
+                    &popup_sync_listener,
+                    this);
+            }
+            return;
+        }
+    }
+    else
+    {
+        if (!libdecorFrame && !CreateLibdecorFrame())
+        {
+            visible = false;
+            throw std::runtime_error(
+                "wGac failed to recreate a libdecor platform frame: " +
+                display->GetLastError());
+        }
+        if (sizeState == WindowSizeState::Maximized)
+        {
+            libdecor_frame_set_maximized(libdecorFrame);
+        }
+        else if (sizeState == WindowSizeState::Minimized)
+        {
+            libdecor_frame_set_minimized(libdecorFrame);
+        }
+        libdecor_frame_map(libdecorFrame);
     }
 
     if (configured) RequestFrame();
@@ -714,9 +1188,36 @@ void WGacNativeWindow::popup_sync_done(void* data, wl_callback* callback, uint32
     for (vint i = 0; i < self->listeners.Count(); i++) { self->listeners[i]->Opened(); }
 }
 void WGacNativeWindow::ShowDeactivated() { Show(); }
-void WGacNativeWindow::ShowRestored() { if (toplevel) xdg_toplevel_unset_maximized(toplevel); }
-void WGacNativeWindow::ShowMaximized() { if (toplevel) xdg_toplevel_set_maximized(toplevel); }
-void WGacNativeWindow::ShowMinimized() { if (toplevel) xdg_toplevel_set_minimized(toplevel); }
+void WGacNativeWindow::ShowRestored() {
+    sizeState = WindowSizeState::Restored;
+    if (!visible)
+    {
+        Show();
+    }
+    if (libdecorFrame && GetXdgToplevel()) {
+        libdecor_frame_unset_maximized(libdecorFrame);
+    }
+}
+void WGacNativeWindow::ShowMaximized() {
+    sizeState = WindowSizeState::Maximized;
+    if (!visible)
+    {
+        Show();
+    }
+    if (libdecorFrame && GetXdgToplevel()) {
+        libdecor_frame_set_maximized(libdecorFrame);
+    }
+}
+void WGacNativeWindow::ShowMinimized() {
+    sizeState = WindowSizeState::Minimized;
+    if (!visible)
+    {
+        Show();
+    }
+    if (libdecorFrame && GetXdgToplevel()) {
+        libdecor_frame_set_minimized(libdecorFrame);
+    }
+}
 
 bool WGacNativeWindow::RequestClose() {
     bool cancel = false;
@@ -753,7 +1254,12 @@ void WGacNativeWindow::Hide(bool closeWindow) {
     }
 
     // If already hidden or never shown, just update state
-    if (!visible && !xdgSurface) {
+    if (!visible &&
+        !xdgSurface &&
+        !popup &&
+        !popupSyncCallback &&
+        !libdecorFrame)
+    {
         return;
     }
 
@@ -774,11 +1280,13 @@ void WGacNativeWindow::Hide(bool closeWindow) {
     }
     pendingFrame = false;
 
-    bool isPopup = (mode == WindowMode::Popup || mode == WindowMode::Tooltip || mode == WindowMode::Menu);
-    if (isPopup) {
+    if (IsPopupMode()) {
         // Reset state so next Show() works correctly
         hasKeyboardFocus = false;
         capturing = false;
+        DismissPopupChildren();
+        ReleasePopupGrab();
+        popupActivationSerial = 0;
 
         // For popup windows, destroy the xdg_popup and xdg_surface to properly close
         if (popupSyncCallback) {
@@ -802,29 +1310,18 @@ void WGacNativeWindow::Hide(bool closeWindow) {
         }
         // Flush to ensure compositor processes the surface destruction
         display->Flush();
-    } else if (xdgSurface) {
-        // For normal windows, destroy xdg_toplevel to hide
-        // This is necessary because Wayland doesn't have a "hide" concept for toplevels
-        if (decoration) {
-            zxdg_toplevel_decoration_v1_destroy(decoration);
-            decoration = nullptr;
-        }
-        if (toplevel) {
-            xdg_toplevel_destroy(toplevel);
-            toplevel = nullptr;
-        }
-        if (xdgSurface) {
-            xdg_surface_destroy(xdgSurface);
-            xdgSurface = nullptr;
-        }
+    } else {
+        // Wayland has no toplevel unmap request. Releasing the libdecor frame
+        // destroys the role while preserving the application-content surface;
+        // Show() decorates and maps the same content surface again.
+        DismissPopupChildren();
+        DestroyLibdecorFrame();
         configured = false;
         hasFirstFrame = false;
-        // Unmap the surface by attaching null buffer
         if (surface) {
             wl_surface_attach(surface, nullptr, 0, 0);
             wl_surface_commit(surface);
         }
-        // Flush to ensure compositor processes the surface destruction
         display->Flush();
     }
 
@@ -857,17 +1354,32 @@ bool WGacNativeWindow::ReleaseCapture() {
 bool WGacNativeWindow::IsCapturing() { return capturing; }
 
 bool WGacNativeWindow::GetMaximizedBox() { return maximizedBox; }
-void WGacNativeWindow::SetMaximizedBox(bool visible) { maximizedBox = visible; }
+void WGacNativeWindow::SetMaximizedBox(bool visible) {
+    maximizedBox = visible;
+    UpdatePlatformFrame();
+}
 bool WGacNativeWindow::GetMinimizedBox() { return minimizedBox; }
-void WGacNativeWindow::SetMinimizedBox(bool visible) { minimizedBox = visible; }
+void WGacNativeWindow::SetMinimizedBox(bool visible) {
+    minimizedBox = visible;
+    UpdatePlatformFrame();
+}
 bool WGacNativeWindow::GetBorder() { return border; }
-void WGacNativeWindow::SetBorder(bool visible) { border = visible; }
+void WGacNativeWindow::SetBorder(bool visible) {
+    border = visible;
+    UpdatePlatformFrame();
+}
 bool WGacNativeWindow::GetSizeBox() { return sizeBox; }
-void WGacNativeWindow::SetSizeBox(bool visible) { sizeBox = visible; }
-bool WGacNativeWindow::GetIconVisible() { return iconVisible; }
-void WGacNativeWindow::SetIconVisible(bool visible) { iconVisible = visible; }
+void WGacNativeWindow::SetSizeBox(bool visible) {
+    sizeBox = visible;
+    UpdatePlatformFrame();
+}
+bool WGacNativeWindow::GetIconVisible() { return false; }
+void WGacNativeWindow::SetIconVisible(bool) { iconVisible = false; }
 bool WGacNativeWindow::GetTitleBar() { return titleBar; }
-void WGacNativeWindow::SetTitleBar(bool visible) { titleBar = visible; }
+void WGacNativeWindow::SetTitleBar(bool visible) {
+    titleBar = visible;
+    UpdatePlatformFrame();
+}
 bool WGacNativeWindow::GetTopMost() { return topMost; }
 void WGacNativeWindow::SetTopMost(bool top) { topMost = top; }
 

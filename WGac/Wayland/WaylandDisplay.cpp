@@ -2,7 +2,11 @@
 #include "WaylandSeat.h"
 #include "IWaylandWindow.h"
 #include <cerrno>
+#include <cstdlib>
+#include <cstdio>
 #include <cstring>
+#include <dlfcn.h>
+#include <link.h>
 #include <poll.h>
 #include <unistd.h>
 #include <stdexcept>
@@ -13,13 +17,6 @@ namespace wayland {
 
 namespace {
     WaylandDisplay* g_wayland_display = nullptr;
-
-    struct DecorationProbe
-    {
-        bool surface_configured = false;
-        bool decoration_configured = false;
-        bool server_side = false;
-    };
 
     const wl_registry_listener registry_listener = {
         .global = WaylandDisplay::registry_global,
@@ -41,69 +38,50 @@ namespace {
         .scale = WaylandDisplay::output_scale,
     };
 
-    void decoration_probe_surface_configure(
-        void* data,
-        xdg_surface* surface,
-        uint32_t serial)
-    {
-        auto* probe = static_cast<DecorationProbe*>(data);
-        probe->surface_configured = true;
-        xdg_surface_ack_configure(surface, serial);
-    }
-
-    void decoration_probe_toplevel_configure(
-        void*,
-        xdg_toplevel*,
-        int32_t,
-        int32_t,
-        wl_array*)
-    {
-    }
-
-    void decoration_probe_toplevel_close(void*, xdg_toplevel*)
-    {
-    }
-
-    void decoration_probe_toplevel_configure_bounds(
-        void*,
-        xdg_toplevel*,
-        int32_t,
-        int32_t)
-    {
-    }
-
-    void decoration_probe_toplevel_wm_capabilities(
-        void*,
-        xdg_toplevel*,
-        wl_array*)
-    {
-    }
-
-    void decoration_probe_configure(
-        void* data,
-        zxdg_toplevel_decoration_v1*,
-        uint32_t mode)
-    {
-        auto* probe = static_cast<DecorationProbe*>(data);
-        probe->decoration_configured = true;
-        probe->server_side =
-            mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;
-    }
-
-    const xdg_surface_listener decoration_probe_surface_listener = {
-        .configure = decoration_probe_surface_configure,
+    libdecor_interface libdecor_interface_ = {
+        .error = WaylandDisplay::libdecor_error,
     };
 
-    const xdg_toplevel_listener decoration_probe_toplevel_listener = {
-        .configure = decoration_probe_toplevel_configure,
-        .close = decoration_probe_toplevel_close,
-        .configure_bounds = decoration_probe_toplevel_configure_bounds,
-        .wm_capabilities = decoration_probe_toplevel_wm_capabilities,
+    struct LibdecorPluginSearch
+    {
+        bool found = false;
     };
 
-    const zxdg_toplevel_decoration_v1_listener decoration_probe_listener = {
-        .configure = decoration_probe_configure,
-    };
+    int find_loaded_libdecor_plugin(dl_phdr_info* info, size_t, void* data)
+    {
+        auto* search = static_cast<LibdecorPluginSearch*>(data);
+        if (!info->dlpi_name || !*info->dlpi_name)
+        {
+            return 0;
+        }
+
+        void* handle = dlopen(info->dlpi_name, RTLD_LAZY | RTLD_NOLOAD);
+        if (!handle)
+        {
+            return 0;
+        }
+
+        search->found = dlsym(handle, "libdecor_plugin_description") != nullptr;
+        dlclose(handle);
+        return search->found ? 1 : 0;
+    }
+
+    bool has_loaded_libdecor_plugin()
+    {
+        LibdecorPluginSearch search;
+        dl_iterate_phdr(find_loaded_libdecor_plugin, &search);
+        return search.found;
+    }
+
+    int dispatch_libdecor(libdecor* context, int timeout)
+    {
+        int result;
+        do
+        {
+            result = libdecor_dispatch(context, timeout);
+        } while (result == -EINTR);
+        return result;
+    }
 }
 
 WaylandDisplay* GetWaylandDisplay() {
@@ -125,8 +103,10 @@ bool WaylandDisplay::Connect() {
         return true;
     }
 
+    last_error.clear();
     display = wl_display_connect(nullptr);
     if (!display) {
+        ReportError("Unable to connect to the Wayland display.");
         return false;
     }
 
@@ -134,6 +114,7 @@ bool WaylandDisplay::Connect() {
 
     registry = wl_display_get_registry(display);
     if (!registry) {
+        ReportError("Unable to obtain the Wayland registry.");
         wl_display_disconnect(display);
         display = nullptr;
         return false;
@@ -142,17 +123,56 @@ bool WaylandDisplay::Connect() {
     wl_registry_add_listener(registry, &registry_listener, this);
 
     // First roundtrip to get globals
-    wl_display_roundtrip(display);
-
-    // Second roundtrip to get shm formats and other nested globals
-    wl_display_roundtrip(display);
-
-    if (!compositor || !shm || !xdg_wm_base_) {
+    if (wl_display_roundtrip(display) < 0) {
+        ReportError("Wayland registry discovery failed.");
         Disconnect();
         return false;
     }
 
-    if (!ProbeDecorationMode()) {
+    // Second roundtrip to get shm formats and other nested globals
+    if (wl_display_roundtrip(display) < 0) {
+        ReportError("Wayland global initialization failed.");
+        Disconnect();
+        return false;
+    }
+
+    if (!compositor || !shm || !xdg_wm_base_) {
+        ReportError("The compositor is missing a required Wayland interface.");
+        Disconnect();
+        return false;
+    }
+
+    // xdg-decoration cannot guarantee that a compositor will remove a
+    // server-side frame after GacUI switches to its custom frame. Force
+    // libdecor to use its desktop-integrated client-side platform frame so
+    // libdecor_frame_set_visibility() is authoritative for every window.
+    if (setenv("LIBDECOR_FORCE_CSD", "1", 1) != 0) {
+        ReportError("Unable to configure libdecor for switchable frames.");
+        Disconnect();
+        return false;
+    }
+
+    libdecor_context = libdecor_new(display, &libdecor_interface_);
+    if (!libdecor_context) {
+        ReportError("Unable to create the libdecor context.");
+        Disconnect();
+        return false;
+    }
+
+    // libdecor silently substitutes a no-decoration fallback if every runtime
+    // plugin fails. Require a retained plugin DSO so system-frame mode can
+    // never continue with a borderless raw toplevel.
+    if (!has_loaded_libdecor_plugin()) {
+        ReportError(
+            "No usable libdecor runtime plugin was loaded. "
+            "Install libdecor-0-plugin-1-gtk or another libdecor plugin.");
+        Disconnect();
+        return false;
+    }
+
+    // Finish libdecor's registry discovery while LIBDECOR_FORCE_CSD is set.
+    if (wl_display_roundtrip(display) < 0) {
+        ReportError("libdecor initialization failed.");
         Disconnect();
         return false;
     }
@@ -161,95 +181,14 @@ bool WaylandDisplay::Connect() {
     return true;
 }
 
-bool WaylandDisplay::ProbeDecorationMode()
-{
-    prefer_custom_frame_window = true;
-    if (!decoration_manager)
-    {
-        return true;
-    }
-
-    wl_surface* probeSurface = wl_compositor_create_surface(compositor);
-    xdg_surface* probeXdgSurface = probeSurface
-        ? xdg_wm_base_get_xdg_surface(xdg_wm_base_, probeSurface)
-        : nullptr;
-    xdg_toplevel* probeToplevel = probeXdgSurface
-        ? xdg_surface_get_toplevel(probeXdgSurface)
-        : nullptr;
-    zxdg_toplevel_decoration_v1* probeDecoration = probeToplevel
-        ? zxdg_decoration_manager_v1_get_toplevel_decoration(
-            decoration_manager,
-            probeToplevel)
-        : nullptr;
-
-    DecorationProbe probe;
-    if (probeXdgSurface)
-    {
-        xdg_surface_add_listener(
-            probeXdgSurface,
-            &decoration_probe_surface_listener,
-            &probe);
-    }
-    if (probeToplevel)
-    {
-        xdg_toplevel_add_listener(
-            probeToplevel,
-            &decoration_probe_toplevel_listener,
-            &probe);
-        xdg_toplevel_set_title(probeToplevel, "GacUI Window");
-        xdg_toplevel_set_app_id(probeToplevel, "gacui");
-    }
-    if (probeDecoration)
-    {
-        zxdg_toplevel_decoration_v1_add_listener(
-            probeDecoration,
-            &decoration_probe_listener,
-            &probe);
-        zxdg_toplevel_decoration_v1_set_mode(
-            probeDecoration,
-            ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
-        wl_surface_commit(probeSurface);
-
-        for (int attempt = 0;
-            attempt < 2 &&
-                (!probe.decoration_configured || !probe.surface_configured);
-            attempt++)
-        {
-            if (wl_display_roundtrip(display) < 0)
-            {
-                break;
-            }
-        }
-    }
-
-    prefer_custom_frame_window =
-        !probe.surface_configured ||
-        !probe.decoration_configured ||
-        !probe.server_side;
-
-    if (probeDecoration)
-    {
-        zxdg_toplevel_decoration_v1_destroy(probeDecoration);
-    }
-    if (probeToplevel)
-    {
-        xdg_toplevel_destroy(probeToplevel);
-    }
-    if (probeXdgSurface)
-    {
-        xdg_surface_destroy(probeXdgSurface);
-    }
-    if (probeSurface)
-    {
-        wl_surface_destroy(probeSurface);
-    }
-
-    return wl_display_get_error(display) == 0;
-}
-
 void WaylandDisplay::Disconnect() {
     if (!connected && !display) {
         return;
+    }
+
+    if (libdecor_context) {
+        libdecor_unref(libdecor_context);
+        libdecor_context = nullptr;
     }
 
     if (data_device) {
@@ -309,21 +248,31 @@ void WaylandDisplay::Disconnect() {
 
     display_fd = -1;
     connected = false;
-    prefer_custom_frame_window = true;
     shm_formats.clear();
+    surface_to_window.clear();
 }
 
 int WaylandDisplay::Dispatch() {
+    if (libdecor_context) {
+        return dispatch_libdecor(libdecor_context, -1);
+    }
     return wl_display_dispatch(display);
 }
 
 int WaylandDisplay::DispatchPending() {
+    if (libdecor_context) {
+        return dispatch_libdecor(libdecor_context, 0);
+    }
     return wl_display_dispatch_pending(display);
 }
 
 int WaylandDisplay::DispatchWithTimeout(int milliseconds) {
     if (!display) {
         return -1;
+    }
+
+    if (libdecor_context) {
+        return dispatch_libdecor(libdecor_context, milliseconds);
     }
 
     while (wl_display_prepare_read(display) != 0) {
@@ -387,13 +336,20 @@ void WaylandDisplay::Run() {
 
     running = true;
 
-    pollfd pfd = {
-        .fd = display_fd,
-        .events = POLLIN,
-        .revents = 0,
-    };
-
     while (running) {
+        if (libdecor_context) {
+            if (dispatch_libdecor(libdecor_context, -1) < 0) {
+                break;
+            }
+            continue;
+        }
+
+        pollfd pfd = {
+            .fd = display_fd,
+            .events = POLLIN,
+            .revents = 0,
+        };
+
         // Flush pending requests
         while (wl_display_prepare_read(display) != 0) {
             wl_display_dispatch_pending(display);
@@ -424,6 +380,31 @@ void WaylandDisplay::Run() {
     }
 
     running = false;
+}
+
+void WaylandDisplay::ReportError(const std::string& message)
+{
+    last_error = message;
+    fprintf(stderr, "wGac: %s\n", last_error.c_str());
+}
+
+void WaylandDisplay::libdecor_error(
+    libdecor*,
+    enum libdecor_error error,
+    const char* message)
+{
+    fprintf(
+        stderr,
+        "wGac: fatal libdecor error (%d): %s\n",
+        static_cast<int>(error),
+        message ? message : "unknown error");
+    fflush(stderr);
+
+    // libdecor 0.2.x destroys its plugin immediately after this callback but
+    // leaves the context pointing to it. Continuing into normal frame/context
+    // cleanup would use the destroyed plugin, so take the documented fatal
+    // path without returning through libdecor.
+    std::_Exit(EXIT_FAILURE);
 }
 
 bool WaylandDisplay::HasShmFormat(uint32_t format) const {

@@ -28,9 +28,8 @@ protected:
     WaylandDisplay* display;
     wl_surface* surface;
     xdg_surface* xdgSurface;
-    xdg_toplevel* toplevel;
     xdg_popup* popup;
-    zxdg_toplevel_decoration_v1* decoration;
+    libdecor_frame* libdecorFrame;
     wl_callback* frameCallback;
     wl_callback* popupSyncCallback;
 
@@ -38,6 +37,8 @@ protected:
     WGacView* view;
 
     WGacNativeWindow* parentWindow;
+    WGacNativeWindow* popupGrabParent;
+    collections::List<WGacNativeWindow*> childWindows;
     INativeCursor* cursor;
     Interface* graphicsHandler;
     WindowListenerList listeners;
@@ -46,6 +47,8 @@ protected:
 
     int32_t currentWidth;
     int32_t currentHeight;
+    int32_t lastFloatingWidth;
+    int32_t lastFloatingHeight;
     int32_t minWidth;
     int32_t minHeight;
     int32_t posX;
@@ -57,6 +60,7 @@ protected:
     bool closed;
     bool pendingFrame;
     bool hasFirstFrame;
+    bool libdecorStateInitialized;
 
     bool customFrameMode;
     bool enabled;
@@ -73,27 +77,37 @@ protected:
     NativePoint caretPoint;
     bool textInputEnabled;
     bool hasKeyboardFocus;
+    uint32_t popupActivationSerial;
 
     void RequestFrame();
     void OnFrame();
     bool CreateXdgSurface();
+    bool CreateLibdecorFrame();
+    void DestroyLibdecorFrame();
+    void UpdatePlatformFrame(bool commitState = true);
+    void UpdateNativeParent();
+    void CommitRequestedSize();
+    void ResizeBufferForCurrentSize();
+    void ReleasePopupGrab();
+    void DismissPopupChildren();
+    bool IsPopupMode() const;
+    xdg_surface* GetXdgSurface() const;
+    xdg_toplevel* GetXdgToplevel() const;
     bool RequestClose();
 
 public:
     // Wayland callbacks
     static void xdg_surface_configure(void* data, xdg_surface* xdg_surface, uint32_t serial);
-    static void xdg_toplevel_configure(void* data, xdg_toplevel* toplevel,
-                                        int32_t width, int32_t height, wl_array* states);
-    static void xdg_toplevel_close(void* data, xdg_toplevel* toplevel);
-    static void xdg_toplevel_configure_bounds(void* data, xdg_toplevel* toplevel,
-                                               int32_t width, int32_t height);
-    static void xdg_toplevel_wm_capabilities(void* data, xdg_toplevel* toplevel,
-                                              wl_array* capabilities);
-    static void xdg_toplevel_decoration_configure(
-        void* data,
-        zxdg_toplevel_decoration_v1* decoration,
-        uint32_t mode
-        );
+    static void libdecor_frame_configure(
+        libdecor_frame* frame,
+        libdecor_configuration* configuration,
+        void* data);
+    static void libdecor_frame_close(libdecor_frame* frame, void* data);
+    static void libdecor_frame_commit(libdecor_frame* frame, void* data);
+    static void libdecor_frame_dismiss_popup(
+        libdecor_frame* frame,
+        const char* seatName,
+        void* data);
     static void xdg_popup_configure(void* data, xdg_popup* popup,
                                      int32_t x, int32_t y, int32_t width, int32_t height);
     static void xdg_popup_done(void* data, xdg_popup* popup);

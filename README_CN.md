@@ -14,6 +14,7 @@ wGac 使用 Wayland、Cairo、Pango 和 XKBCommon，为 Linux Wayland 实现 Gac
 sudo apt update
 sudo apt install build-essential clang cmake pkg-config \
     libwayland-dev libxkbcommon-dev \
+    libdecor-0-dev libdecor-0-plugin-1-gtk \
     libcairo2-dev libpango1.0-dev libfontconfig1-dev \
     libgdk-pixbuf-2.0-dev libglib2.0-dev liburing-dev \
     xdg-desktop-portal
@@ -22,6 +23,8 @@ sudo apt install build-essential clang cmake pkg-config \
 还需要安装桌面环境对应的 Portal 后端，例如 GNOME 上的 `xdg-desktop-portal-gnome`。wGac 通过 FileChooser Portal 显示原生的打开和保存文件对话框。
 
 请在 Wayland 桌面会话中运行应用，并确保 `WAYLAND_DISPLAY` 和 `XDG_RUNTIME_DIR` 可用。
+
+wGac 启动时需要 libdecor 和实际可用的运行时装饰插件；如果只能得到 libdecor 不绘制装饰的后备插件，wGac 会输出诊断并停止，而不会静默地继续运行。为了在所有合成器上安全地反复切换 GacUI 自定义边框和平台边框，即使服务端装饰可用，wGac 也会强制 libdecor 提供客户端绘制的平台边框。从 GacUI 的角度看，该 libdecor 边框属于原生平台边框，与 GacUI 的自定义窗口模板不同。
 
 维护仓库时，请将 GacUI、Workflow 和 Tools 仓库放在 wGac 的同级目录，或者运行 `./syncOrg.sh`。`import.sh` 读取 GacUI 框架快照；`syncProj.sh` 读取 GacUI 测试资源，并编译 Workflow 和 GacUI 中的代码生成器。同级的 Release 仓库不是编译或导入依赖。
 
@@ -144,3 +147,5 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，并在 88
 - 打开和保存文件已实现原生 FileChooser Portal；原生颜色和字体对话框尚未实现。
 - 消息框目前仍使用现有的后备行为。
 - Wayland 不允许客户端全局定位普通顶层窗口；位置请求由合成器决定。
+- libdecor 没有设置平台边框窗口图标的 API，因此不支持 `IconVisible`，其 getter 始终返回 `false`。
+- libdecor 无法单独隐藏最大化控件。最大化操作入口由 `SizeBox`（边框的缩放能力）决定；`MaximizedBox` 会保留并返回请求值，但无法突破这一平台限制。
