@@ -19,6 +19,18 @@ namespace wgac {
 // Forward declaration
 class WGacLayoutProvider;
 
+namespace
+{
+    AString ToPangoUtf8(const WString& text)
+    {
+        auto utf8 = wtou8(text);
+        return AString::CopyFrom(
+            reinterpret_cast<const char*>(utf8.Buffer()),
+            utf8.Length()
+            );
+    }
+}
+
 // WGacParagraph - Pango-based paragraph implementation with proper Unicode handling
 class WGacParagraph : public Object, public IGuiGraphicsParagraph
 {
@@ -91,24 +103,17 @@ protected:
     void BuildPositionMaps()
     {
         charToByteMap.Resize(text.Length() + 1);
-        utf8Text = wtoa(text);
+        utf8Text = ToPangoUtf8(text);
 
         vint byteOffset = 0;
         for (vint i = 0; i < text.Length(); i++)
         {
             charToByteMap[i] = byteOffset;
-            // Calculate UTF-8 byte length for this character
-            wchar_t ch = text[i];
-            if (ch < 0x80) byteOffset += 1;
-            else if (ch < 0x800) byteOffset += 2;
-            else if (ch >= 0xD800 && ch <= 0xDBFF)
-            {
-                // Surrogate pair - handle as 4 bytes
-                byteOffset += 4;
-                if (i + 1 < text.Length()) i++; // Skip low surrogate
-                charToByteMap[i] = byteOffset;
-            }
-            else byteOffset += 3;
+            vuint32_t codePoint = static_cast<vuint32_t>(text[i]);
+            if (codePoint < 0x80) byteOffset += 1;
+            else if (codePoint < 0x800) byteOffset += 2;
+            else if (codePoint < 0x10000) byteOffset += 3;
+            else byteOffset += 4;
         }
         charToByteMap[text.Length()] = byteOffset;
 
@@ -185,7 +190,7 @@ protected:
             guint startByte = CharToBytePos(frag.start);
             guint endByte = CharToBytePos(frag.start + frag.length);
 
-            AString fontFamily = wtoa(frag.fontFamily.Length() > 0 ? frag.fontFamily : defaultFont.fontFamily);
+            AString fontFamily = ToPangoUtf8(frag.fontFamily.Length() > 0 ? frag.fontFamily : defaultFont.fontFamily);
 
             PangoAttribute* attr;
 
@@ -444,7 +449,7 @@ public:
 
         // Set default font
         PangoFontDescription* fontDesc = pango_font_description_new();
-        AString family = wtoa(defaultFont.fontFamily);
+        AString family = ToPangoUtf8(defaultFont.fontFamily);
         pango_font_description_set_family(fontDesc, family.Buffer());
         pango_font_description_set_absolute_size(fontDesc, defaultFont.size * PANGO_SCALE);
         pango_layout_set_font_description(layout, fontDesc);
@@ -1239,7 +1244,7 @@ public:
         }
 
         auto* font = pango_font_description_new();
-        AString family = wtoa(fontProperties.fontFamily);
+        AString family = ToPangoUtf8(fontProperties.fontFamily);
         pango_font_description_set_family(font, family.Buffer());
         pango_font_description_set_absolute_size(font, fontProperties.size * PANGO_SCALE);
         pango_font_description_set_weight(font, fontProperties.bold ? PANGO_WEIGHT_BOLD : PANGO_WEIGHT_NORMAL);
@@ -1410,14 +1415,14 @@ class GuiSolidLabelElementRenderer : public GuiElementRendererBase<GuiSolidLabel
                     else
                     {
                         pango_layout_set_width(layout, oldMaxWidth * PANGO_SCALE);
-                        AString text = wtoa(oldText);
+                        AString text = ToPangoUtf8(oldText);
                         pango_layout_set_text(layout, text.Buffer(), -1);
                     }
                 }
             }
             else
             {
-                AString text = wtoa(oldText.Length() == 0 ? L"" : oldText);
+                AString text = ToPangoUtf8(oldText.Length() == 0 ? L"" : oldText);
                 pango_layout_set_text(layout, text.Buffer(), -1);
             }
 
@@ -1461,7 +1466,7 @@ public:
         auto font = GetWGacResourceManager()->CreateWGacFont(element->GetFont());
         pango_layout_set_font_description(layout, font);
 
-        AString text = wtoa(element->GetText());
+        AString text = ToPangoUtf8(element->GetText());
         pango_layout_set_text(layout, text.Buffer(), -1);
 
         // Set wrap mode and width
