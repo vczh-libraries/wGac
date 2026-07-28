@@ -32,10 +32,6 @@ int main(int argc, char* argv[])
 void GuiMain()
 {
     demo::MainWindow window;
-    if (!GetHostedApplication())
-    {
-        window.SetControlThemeName(theme::ThemeName::Window);
-    }
     window.ForceCalculateSizeImmediately();
     window.MoveToScreenCenter();
 
