@@ -31,12 +31,41 @@ Read these files before changing this repository:
 - Generated reflection sources are retained but excluded from test targets, which compile with `VCZH_DEBUG_NO_REFLECTION`.
 - Do not edit build output under `build/`.
 
+The files under `WGac/Protocol/` are committed `wayland-scanner` outputs. Normal builds consume them without regenerating them. With `wayland-scanner`, `pkg-config`, and `wayland-protocols` installed, run these commands from the repository root to refresh all three client protocols:
+
+```bash
+WGAC_PROTOCOLS_DIR="$(pkg-config --variable=pkgdatadir wayland-protocols)"
+
+wayland-scanner client-header \
+    "$WGAC_PROTOCOLS_DIR/stable/xdg-shell/xdg-shell.xml" \
+    WGac/Protocol/xdg-shell-client-protocol.h
+wayland-scanner private-code \
+    "$WGAC_PROTOCOLS_DIR/stable/xdg-shell/xdg-shell.xml" \
+    WGac/Protocol/xdg-shell-protocol.c
+
+wayland-scanner client-header \
+    "$WGAC_PROTOCOLS_DIR/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml" \
+    WGac/Protocol/xdg-decoration-unstable-v1-client-protocol.h
+wayland-scanner private-code \
+    "$WGAC_PROTOCOLS_DIR/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml" \
+    WGac/Protocol/xdg-decoration-protocol.c
+
+wayland-scanner client-header \
+    "$WGAC_PROTOCOLS_DIR/unstable/text-input/text-input-unstable-v3.xml" \
+    WGac/Protocol/text-input-unstable-v3-client-protocol.h
+wayland-scanner private-code \
+    "$WGAC_PROTOCOLS_DIR/unstable/text-input/text-input-unstable-v3.xml" \
+    WGac/Protocol/text-input-unstable-v3-protocol.c
+```
+
+Review the complete generated diff before committing because both the scanner and the installed protocol XML versions affect the output.
+
 ## Wayland Platform Rules
 
 - Do not use `GetCurrentController()` in `WGac/` OS-provider code. Hosted mode changes the current application-level controller. Use `GetWGacController()` for native Wayland objects and services.
 - Preserve the standard, hosted, and raw/native-renderer setup paths when changing renderer or service initialization.
 - Native windows used by automation must be validated against the controller's currently created-window list before an integer ID is dereferenced.
-- Keep platform changes limited to the files required by the task. The root protocol fixtures and editor configuration are legacy inputs and are not normal update targets.
+- Keep platform changes limited to the files required by the task. The root `wgac.c` demo and editor configuration are legacy inputs and are not normal update targets.
 
 ## Testing Rules
 

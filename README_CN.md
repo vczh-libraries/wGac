@@ -144,8 +144,12 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，并在 88
 
 ## 已知限制
 
-- 打开和保存文件已实现原生 FileChooser Portal；原生颜色和字体对话框尚未实现。
-- 消息框目前仍使用现有的后备行为。
+- 原生对话框：
+  - 打开和保存文件已实现原生 FileChooser Portal。
+  - 消息框尚未实现。
+  - 颜色选择器尚未实现。
+  - 字体选择器尚未实现。
+  - 上述功能完成后，需要更新 `Tools/Copilot/Guidelines/Running-ComputerUse.md`。
 - Wayland 不允许客户端全局定位普通顶层窗口；位置请求由合成器决定。
 - libdecor 没有设置平台边框窗口图标的 API，因此不支持 `IconVisible`，其 getter 始终返回 `false`。
 - libdecor 无法单独隐藏最大化控件。最大化操作入口由 `SizeBox`（边框的缩放能力）决定；`MaximizedBox` 会保留并返回请求值，但无法突破这一平台限制。

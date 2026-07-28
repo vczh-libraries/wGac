@@ -8,7 +8,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <wayland-client.h>
-#include "xdg-shell-client-protocol.h"
+#include "WGac/Protocol/xdg-shell-client-protocol.h"
 
 /* Shared memory support code */
 static void
