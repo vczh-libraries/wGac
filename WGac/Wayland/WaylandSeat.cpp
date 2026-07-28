@@ -122,6 +122,13 @@ void WaylandSeat::seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
             zwp_text_input_v3_add_listener(self->text_input, &text_input_listener, self);
         }
     } else if (!has_keyboard && self->keyboard) {
+        if (self->keyboard_focus && self->keyboard_leave_cb) {
+            self->keyboard_leave_cb(self->keyboard_focus);
+        }
+        self->keyboard_focus = nullptr;
+        self->keyboard_press_serial = 0;
+        self->current_input_serial = 0;
+
         if (self->text_input) {
             zwp_text_input_v3_destroy(self->text_input);
             self->text_input = nullptr;
@@ -136,6 +143,16 @@ void WaylandSeat::seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
         self->pointer = wl_seat_get_pointer(seat);
         wl_pointer_add_listener(self->pointer, &pointer_listener, self);
     } else if (!has_pointer && self->pointer) {
+        if (self->pointer_focus && self->pointer_leave_cb) {
+            self->pointer_leave_cb(self->pointer_focus);
+        }
+        self->pointer_focus = nullptr;
+        self->pointer_focus_surface = nullptr;
+        self->pointer_buttons = 0;
+        self->pointer_enter_serial = 0;
+        self->pointer_press_serial = 0;
+        self->current_input_serial = 0;
+
         wl_pointer_destroy(self->pointer);
         self->pointer = nullptr;
     }
@@ -231,7 +248,7 @@ void WaylandSeat::keyboard_key(void* data, wl_keyboard* keyboard,
 
     // Track keyboard serial for clipboard operations
     self->last_keyboard_serial = serial;
-    self->last_input_serial = serial;
+    self->last_user_action_serial = serial;
 
     KeyState keyState = (state == WL_KEYBOARD_KEY_STATE_PRESSED)
         ? KeyState::Pressed
@@ -283,8 +300,7 @@ void WaylandSeat::pointer_enter(void* data, wl_pointer* pointer,
     (void)pointer;
     auto* self = static_cast<WaylandSeat*>(data);
 
-    self->last_pointer_serial = serial;
-    self->last_input_serial = serial;
+    self->pointer_enter_serial = serial;
     self->pointer_focus_surface = surface;
     self->pointer_focus = self->FindWindowBySurface(surface);
     self->pointer_x = wl_fixed_to_int(sx);
@@ -307,6 +323,10 @@ void WaylandSeat::pointer_leave(void* data, wl_pointer* pointer,
     }
     self->pointer_focus = nullptr;
     self->pointer_focus_surface = nullptr;
+    // A compositor-owned move/resize may take focus and never return the
+    // release event to this surface.
+    self->pointer_buttons = 0;
+    self->pointer_press_serial = 0;
 }
 
 void WaylandSeat::pointer_motion(void* data, wl_pointer* pointer,
@@ -330,8 +350,7 @@ void WaylandSeat::pointer_button(void* data, wl_pointer* pointer,
     (void)time;
     auto* self = static_cast<WaylandSeat*>(data);
 
-    self->last_pointer_serial = serial;
-    self->last_input_serial = serial;
+    self->last_user_action_serial = serial;
 
     bool pressed = (state == WL_POINTER_BUTTON_STATE_PRESSED);
     if (pressed)
@@ -349,6 +368,7 @@ void WaylandSeat::pointer_button(void* data, wl_pointer* pointer,
     if (self->pointer_focus && self->pointer_button_cb) {
         MouseEventInfo info = self->CreateMouseEventInfo();
         info.button = button;
+        info.buttonPressSerial = pressed ? serial : 0;
         // GacUI buttons execute on release. Keep using the initiating press
         // serial for that callback; never substitute pointer-enter or
         // button-release serials for xdg_popup.grab.
@@ -489,13 +509,13 @@ IWaylandWindow* WaylandSeat::FindWindowBySurface(wl_surface* surface) {
 // Cursor methods
 void WaylandSeat::SetCursor(wl_surface* cursor_surface, int32_t hotspot_x, int32_t hotspot_y) {
     if (pointer && pointer_focus_surface) {
-        wl_pointer_set_cursor(pointer, last_pointer_serial, cursor_surface, hotspot_x, hotspot_y);
+        wl_pointer_set_cursor(pointer, pointer_enter_serial, cursor_surface, hotspot_x, hotspot_y);
     }
 }
 
 void WaylandSeat::HideCursor() {
     if (pointer && pointer_focus_surface) {
-        wl_pointer_set_cursor(pointer, last_pointer_serial, nullptr, 0, 0);
+        wl_pointer_set_cursor(pointer, pointer_enter_serial, nullptr, 0, 0);
     }
 }
 

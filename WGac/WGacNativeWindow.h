@@ -63,6 +63,7 @@ protected:
     bool libdecorStateInitialized;
 
     bool customFrameMode;
+    INativeWindowListener::HitTestResult pressedCaptionButton;
     bool enabled;
     bool capturing;
     bool border;
@@ -94,6 +95,8 @@ protected:
     xdg_surface* GetXdgSurface() const;
     xdg_toplevel* GetXdgToplevel() const;
     bool RequestClose();
+    INativeWindowListener::HitTestResult PerformCustomFrameHitTest(int32_t x, int32_t y);
+    void ClearPressedCaptionButton();
 
 public:
     // Wayland callbacks

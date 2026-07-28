@@ -64,6 +64,7 @@ WGacNativeWindow::WGacNativeWindow(WaylandDisplay* _display, INativeWindow::Wind
     , hasFirstFrame(false)
     , libdecorStateInitialized(false)
     , customFrameMode(false)
+    , pressedCaptionButton(INativeWindowListener::NoDecision)
     , enabled(true)
     , capturing(false)
     , border(true)
@@ -140,6 +141,22 @@ xdg_toplevel* WGacNativeWindow::GetXdgToplevel() const
     return libdecorFrame
         ? libdecor_frame_get_xdg_toplevel(libdecorFrame)
         : nullptr;
+}
+
+INativeWindowListener::HitTestResult WGacNativeWindow::PerformCustomFrameHitTest(
+    int32_t x,
+    int32_t y)
+{
+    if (mode != WindowMode::Normal || !customFrameMode)
+    {
+        return INativeWindowListener::NoDecision;
+    }
+    return PerformHitTest(From(listeners), NativePoint(x, y));
+}
+
+void WGacNativeWindow::ClearPressedCaptionButton()
+{
+    pressedCaptionButton = INativeWindowListener::NoDecision;
 }
 
 bool WGacNativeWindow::CreateLibdecorFrame()
@@ -222,6 +239,7 @@ bool WGacNativeWindow::CreateLibdecorFrame()
 
 void WGacNativeWindow::DestroyLibdecorFrame()
 {
+    ClearPressedCaptionButton();
     if (!libdecorFrame)
     {
         return;
@@ -586,6 +604,7 @@ bool WGacNativeWindow::CreateXdgSurface()
 
 void WGacNativeWindow::Destroy()
 {
+    ClearPressedCaptionButton();
     DismissPopupChildren();
     while (childWindows.Count() > 0)
     {
@@ -1105,6 +1124,7 @@ void WGacNativeWindow::EnableCustomFrameMode() {
     UpdatePlatformFrame();
 }
 void WGacNativeWindow::DisableCustomFrameMode() {
+    ClearPressedCaptionButton();
     customFrameMode = false;
     UpdatePlatformFrame();
 }
@@ -1248,6 +1268,7 @@ bool WGacNativeWindow::RequestClose() {
 }
 
 void WGacNativeWindow::Hide(bool closeWindow) {
+    ClearPressedCaptionButton();
     if (closeWindow) {
         RequestClose();
         return;
@@ -1414,6 +1435,7 @@ void WGacNativeWindow::OnMouseEnter(int32_t x, int32_t y) {
 }
 
 void WGacNativeWindow::OnMouseLeave() {
+    ClearPressedCaptionButton();
     for (auto listener : listeners) {
         listener->MouseLeaved();
     }
@@ -1436,30 +1458,113 @@ void WGacNativeWindow::OnMouseMove(const MouseEventInfo& info) {
 }
 
 void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
+    const uint32_t buttonPressSerial = info.buttonPressSerial;
+    auto* const actionSeat = display ? display->GetWaylandSeat() : nullptr;
+    auto* const actionFrame = libdecorFrame;
+    const bool leftButton =
+        info.button == static_cast<uint32_t>(MouseButton::Left);
+
+    auto hitTestResult = INativeWindowListener::NoDecision;
+    auto captionPress = INativeWindowListener::NoDecision;
+    auto resizeEdge = LIBDECOR_RESIZE_EDGE_NONE;
+    if (leftButton)
+    {
+        if (pressed)
+        {
+            ClearPressedCaptionButton();
+        }
+        else
+        {
+            captionPress = pressedCaptionButton;
+            ClearPressedCaptionButton();
+        }
+
+        hitTestResult = PerformCustomFrameHitTest(info.x, info.y);
+        if (pressed)
+        {
+            switch (hitTestResult)
+            {
+            case INativeWindowListener::ButtonMinimum:
+            case INativeWindowListener::ButtonMaximum:
+            case INativeWindowListener::ButtonClose:
+                pressedCaptionButton = hitTestResult;
+                break;
+            default:
+                break;
+            }
+        }
+
+        switch (hitTestResult)
+        {
+        case INativeWindowListener::BorderLeft:
+            resizeEdge = LIBDECOR_RESIZE_EDGE_LEFT;
+            break;
+        case INativeWindowListener::BorderRight:
+            resizeEdge = LIBDECOR_RESIZE_EDGE_RIGHT;
+            break;
+        case INativeWindowListener::BorderTop:
+            resizeEdge = LIBDECOR_RESIZE_EDGE_TOP;
+            break;
+        case INativeWindowListener::BorderBottom:
+            resizeEdge = LIBDECOR_RESIZE_EDGE_BOTTOM;
+            break;
+        case INativeWindowListener::BorderLeftTop:
+            resizeEdge = LIBDECOR_RESIZE_EDGE_TOP_LEFT;
+            break;
+        case INativeWindowListener::BorderRightTop:
+            resizeEdge = LIBDECOR_RESIZE_EDGE_TOP_RIGHT;
+            break;
+        case INativeWindowListener::BorderLeftBottom:
+            resizeEdge = LIBDECOR_RESIZE_EDGE_BOTTOM_LEFT;
+            break;
+        case INativeWindowListener::BorderRightBottom:
+            resizeEdge = LIBDECOR_RESIZE_EDGE_BOTTOM_RIGHT;
+            break;
+        default:
+            break;
+        }
+    }
+
+    const bool canRequestInteractiveAction =
+        leftButton &&
+        pressed &&
+        buttonPressSerial != 0 &&
+        mode == WindowMode::Normal &&
+        customFrameMode &&
+        visible &&
+        configured &&
+        actionSeat &&
+        display &&
+        display->GetWaylandSeat() == actionSeat &&
+        actionSeat->GetSeat() &&
+        actionSeat->GetPointerFocus() == this &&
+        actionFrame &&
+        libdecorFrame == actionFrame &&
+        GetXdgToplevel();
+    const bool requestTitleMove =
+        canRequestInteractiveAction &&
+        hitTestResult == INativeWindowListener::Title &&
+        titleBar;
+    const bool requestBorderResize =
+        canRequestInteractiveAction &&
+        resizeEdge != LIBDECOR_RESIZE_EDGE_NONE &&
+        sizeBox &&
+        sizeState == WindowSizeState::Restored &&
+        libdecor_frame_is_floating(actionFrame);
+
     NativeWindowMouseInfo nativeInfo = {};  // Zero-initialize all fields
     nativeInfo.x = info.x;
     nativeInfo.y = info.y;
     nativeInfo.ctrl = info.ctrl;
     nativeInfo.shift = info.shift;
     nativeInfo.wheel = 0;
-    nativeInfo.nonClient = false;
-
-    // Set button states
-    // For press: include the button being pressed (state updated before callback)
-    // For release: use current state (button already released, so flag is false)
-    // This matches Windows behavior where WM_LBUTTONUP has MK_LBUTTON=0
-    if (pressed) {
-        // Button state was already updated to include this button
-        nativeInfo.left = info.left;
-        nativeInfo.middle = info.middle;
-        nativeInfo.right = info.right;
-    } else {
-        // Button state was already updated to exclude this button
-        // This allows MouseUncapture to detect when all buttons are released
-        nativeInfo.left = info.left;
-        nativeInfo.middle = info.middle;
-        nativeInfo.right = info.right;
-    }
+    // A compositor-owned move/resize takes the pointer grab and may withhold
+    // the release from this surface. Keep the callback, but prevent GacUI from
+    // retaining a client capture that it could never release.
+    nativeInfo.nonClient = requestTitleMove || requestBorderResize;
+    nativeInfo.left = info.left;
+    nativeInfo.middle = info.middle;
+    nativeInfo.right = info.right;
 
     for (auto listener : listeners) {
         if (pressed) {
@@ -1479,6 +1584,97 @@ void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
                 listener->MiddleButtonUp(nativeInfo);
             }
         }
+    }
+
+    if (leftButton && pressed)
+    {
+        const bool actionIsStillValid =
+            nativeInfo.nonClient &&
+            mode == WindowMode::Normal &&
+            customFrameMode &&
+            visible &&
+            configured &&
+            actionSeat &&
+            display &&
+            display->GetWaylandSeat() == actionSeat &&
+            actionSeat->GetSeat() &&
+            actionSeat->GetPointerFocus() == this &&
+            actionFrame &&
+            libdecorFrame == actionFrame &&
+            GetXdgToplevel();
+        if (!actionIsStillValid)
+        {
+            return;
+        }
+
+        if (requestTitleMove)
+        {
+            if (titleBar)
+            {
+                libdecor_frame_move(
+                    actionFrame,
+                    actionSeat->GetSeat(),
+                    buttonPressSerial);
+            }
+            return;
+        }
+
+        if (!requestBorderResize ||
+            !sizeBox ||
+            sizeState != WindowSizeState::Restored ||
+            !libdecor_frame_is_floating(actionFrame))
+        {
+            return;
+        }
+
+        libdecor_frame_resize(
+            actionFrame,
+            actionSeat->GetSeat(),
+            buttonPressSerial,
+            resizeEdge);
+        return;
+    }
+
+    if (!leftButton ||
+        pressed ||
+        captionPress == INativeWindowListener::NoDecision ||
+        hitTestResult != captionPress ||
+        mode != WindowMode::Normal ||
+        !customFrameMode ||
+        !visible ||
+        !configured ||
+        !actionFrame ||
+        libdecorFrame != actionFrame)
+    {
+        return;
+    }
+
+    switch (captionPress)
+    {
+    case INativeWindowListener::ButtonMinimum:
+        if (minimizedBox)
+        {
+            ShowMinimized();
+        }
+        break;
+    case INativeWindowListener::ButtonMaximum:
+        if (maximizedBox)
+        {
+            if (GetSizeState() == WindowSizeState::Maximized)
+            {
+                ShowRestored();
+            }
+            else
+            {
+                ShowMaximized();
+            }
+        }
+        break;
+    case INativeWindowListener::ButtonClose:
+        Hide(true);
+        break;
+    default:
+        break;
     }
 }
 
@@ -1623,6 +1819,10 @@ void WGacNativeWindow::OnKeyEvent(const KeyEventInfo& info) {
 }
 
 void WGacNativeWindow::OnFocusChanged(bool focused) {
+    if (!focused)
+    {
+        ClearPressedCaptionButton();
+    }
     // Avoid duplicate notifications
     if (hasKeyboardFocus == focused) {
         return;

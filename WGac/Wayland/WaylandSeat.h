@@ -34,6 +34,8 @@ struct MouseEventInfo {
     int32_t x = 0;
     int32_t y = 0;
     uint32_t button = 0;
+    // Nonzero only for the physical button-press callback that owns this serial.
+    uint32_t buttonPressSerial = 0;
     bool left = false;
     bool right = false;
     bool middle = false;
@@ -109,9 +111,12 @@ private:
     int32_t pointer_y = 0;
     uint32_t pointer_buttons = 0;
     uint32_t modifiers = 0;
-    uint32_t last_pointer_serial = 0;
+    // Cursor requests must use the most recent wl_pointer.enter serial.
+    uint32_t pointer_enter_serial = 0;
     uint32_t last_keyboard_serial = 0;
-    uint32_t last_input_serial = 0;
+    // Updated in callback arrival order; Wayland serial values may wrap.
+    uint32_t last_user_action_serial = 0;
+    // Popup creation during a callback uses the gesture's initiating press.
     uint32_t current_input_serial = 0;
     uint32_t pointer_press_serial = 0;
     uint32_t keyboard_press_serial = 0;
@@ -212,9 +217,9 @@ public:
 
     int32_t GetPointerX() const { return pointer_x; }
     int32_t GetPointerY() const { return pointer_y; }
-    uint32_t GetLastPointerSerial() const { return last_pointer_serial; }
+    uint32_t GetPointerEnterSerial() const { return pointer_enter_serial; }
     uint32_t GetLastKeyboardSerial() const { return last_keyboard_serial; }
-    uint32_t GetLastInputSerial() const { return last_input_serial; }
+    uint32_t GetLastInputSerial() const { return last_user_action_serial; }
     uint32_t GetCurrentInputSerial() const { return current_input_serial; }
 
     bool IsModifierPressed(uint32_t mod) const { return (modifiers & mod) != 0; }
