@@ -37,6 +37,7 @@ protected:
 
     WaylandDisplay* display;
     bool running;
+    bool finalizing;
 
 public:
     WGacController()
@@ -45,6 +46,7 @@ public:
         , inputService(&GlobalTimerFunc)
         , display(nullptr)
         , running(false)
+        , finalizing(false)
     {
         display = new WaylandDisplay();
         if (!display->Connect() || !display->GetLibdecorContext())
@@ -65,6 +67,7 @@ public:
 
     ~WGacController()
     {
+        finalizing = true;
         inputService.StopTimer();
 
         while (windows.Count() > 0)
@@ -173,6 +176,20 @@ public:
         WGacNativeWindow* window = dynamic_cast<WGacNativeWindow*>(_window);
         if (window && windows.Contains(window))
         {
+            // GuiApplication is already gone when the controller destructor
+            // cleans up dormant popup windows.
+            if (!finalizing)
+            {
+                List<INativeWindowListener*> copiedListeners;
+                CopyFrom(copiedListeners, window->listeners);
+                for (auto listener : copiedListeners)
+                {
+                    if (window->listeners.Contains(listener))
+                    {
+                        listener->Destroying();
+                    }
+                }
+            }
             callbackService.InvokeNativeWindowDestroying(window);
             windows.Remove(window);
             if (mainWindow == window)
@@ -320,7 +337,9 @@ public:
 
     INativeDialogService* DialogService() override
     {
-        return &dialogService;
+        // GuiInitializeUtilities installs FakeDialogService when the platform
+        // controller does not provide a dialog service.
+        return nullptr;
     }
 
     INativeAutomationService* AutomationService() override

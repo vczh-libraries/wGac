@@ -1799,7 +1799,9 @@ class GuiImageFrameElementRenderer : public GuiElementRendererBase<GuiImageFrame
         if (image) {
             auto frame = image->GetFrame(element->GetFrameIndex());
             if (frame) {
-                minSize = frame->GetSize();
+                minSize = element->GetStretch()
+                    ? Size(0, 0)
+                    : frame->GetSize();
                 return;
             }
         }

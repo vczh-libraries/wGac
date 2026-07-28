@@ -16,11 +16,10 @@ sudo apt install build-essential clang cmake pkg-config \
     libwayland-dev libxkbcommon-dev \
     libdecor-0-dev libdecor-0-plugin-1-gtk \
     libcairo2-dev libpango1.0-dev libfontconfig1-dev \
-    libgdk-pixbuf-2.0-dev libglib2.0-dev liburing-dev \
-    xdg-desktop-portal
+    libgdk-pixbuf-2.0-dev libglib2.0-dev liburing-dev
 ```
 
-Install the portal backend for your desktop as well, such as `xdg-desktop-portal-gnome` on GNOME. wGac uses the FileChooser portal for native open and save dialogs.
+The retained `WGacDialogService` implementation uses GIO, but current Wayland applications select `FakeDialogService` and do not require a desktop portal backend.
 
 Run applications from a Wayland desktop session with `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` available.
 
@@ -149,7 +148,7 @@ Follow [GacUI's native-renderer verification guide](../GacUI/DebugRemoteProtocol
   - Message box not implemented.
   - Color picker not implemented.
   - Font picker not implemented.
-  - Needs to update `Tools/Copilot/Guidelines/Running-ComputerUse.md` when they are done.
+  - These are limitations of `WGacDialogService`; the Wayland implementation currently always uses GacUI's `FakeDialogService`, so applications do not invoke any native dialog.
 - Wayland does not allow clients to position normal top-level windows globally; placement requests are compositor-dependent.
 - libdecor has no platform-frame window-icon API, so `IconVisible` is unsupported and always reports `false`.
 - libdecor cannot independently hide the maximize control. Its maximize affordance follows `SizeBox` (the frame's resize capability); `MaximizedBox` retains its requested value but cannot override that platform limitation.

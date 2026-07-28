@@ -16,11 +16,10 @@ sudo apt install build-essential clang cmake pkg-config \
     libwayland-dev libxkbcommon-dev \
     libdecor-0-dev libdecor-0-plugin-1-gtk \
     libcairo2-dev libpango1.0-dev libfontconfig1-dev \
-    libgdk-pixbuf-2.0-dev libglib2.0-dev liburing-dev \
-    xdg-desktop-portal
+    libgdk-pixbuf-2.0-dev libglib2.0-dev liburing-dev
 ```
 
-还需要安装桌面环境对应的 Portal 后端，例如 GNOME 上的 `xdg-desktop-portal-gnome`。wGac 通过 FileChooser Portal 显示原生的打开和保存文件对话框。
+保留的 `WGacDialogService` 实现依赖 GIO，但当前 Wayland 应用会选择 `FakeDialogService`，无需安装桌面 Portal 后端。
 
 请在 Wayland 桌面会话中运行应用，并确保 `WAYLAND_DISPLAY` 和 `XDG_RUNTIME_DIR` 可用。
 
@@ -149,7 +148,7 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，并在 88
   - 消息框尚未实现。
   - 颜色选择器尚未实现。
   - 字体选择器尚未实现。
-  - 上述功能完成后，需要更新 `Tools/Copilot/Guidelines/Running-ComputerUse.md`。
+  - 这些限制属于 `WGacDialogService`；Wayland 实现目前始终使用 GacUI 的 `FakeDialogService`，因此应用不会调用任何原生对话框。
 - Wayland 不允许客户端全局定位普通顶层窗口；位置请求由合成器决定。
 - libdecor 没有设置平台边框窗口图标的 API，因此不支持 `IconVisible`，其 getter 始终返回 `false`。
 - libdecor 无法单独隐藏最大化控件。最大化操作入口由 `SizeBox`（边框的缩放能力）决定；`MaximizedBox` 会保留并返回请求值，但无法突破这一平台限制。
