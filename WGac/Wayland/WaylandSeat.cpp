@@ -1,6 +1,7 @@
 #include "WaylandSeat.h"
 #include "WaylandDisplay.h"
 #include "IWaylandWindow.h"
+#include "../WGacCursor.h"
 #include <sys/mman.h>
 #include <unistd.h>
 #include <cstring>
@@ -54,6 +55,10 @@ static const zwp_text_input_v3_listener text_input_listener = {
 WaylandSeat::WaylandSeat(WaylandDisplay* disp)
     : display(disp)
 {
+    // Theme and surface creation stay lazy so output scale has been reported
+    // before the first cursor image is loaded.
+    cursor_renderer = new WGacCursorRenderer(display);
+
     // Create XKB context
     xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     if (!xkb_ctx) {
@@ -71,6 +76,10 @@ void WaylandSeat::Initialize(wl_seat* s) {
 }
 
 void WaylandSeat::Destroy() {
+    ResetPointerState();
+    delete cursor_renderer;
+    cursor_renderer = nullptr;
+
     if (text_input) {
         zwp_text_input_v3_destroy(text_input);
         text_input = nullptr;
@@ -140,18 +149,15 @@ void WaylandSeat::seat_capabilities(void* data, wl_seat* seat, uint32_t caps) {
     // Handle pointer capability
     bool has_pointer = caps & WL_SEAT_CAPABILITY_POINTER;
     if (has_pointer && !self->pointer) {
+        self->ResetPointerState();
         self->pointer = wl_seat_get_pointer(seat);
         wl_pointer_add_listener(self->pointer, &pointer_listener, self);
     } else if (!has_pointer && self->pointer) {
-        if (self->pointer_focus && self->pointer_leave_cb) {
-            self->pointer_leave_cb(self->pointer_focus);
+        auto* oldFocus = self->pointer_focus;
+        self->ResetPointerState();
+        if (oldFocus && self->pointer_leave_cb) {
+            self->pointer_leave_cb(oldFocus);
         }
-        self->pointer_focus = nullptr;
-        self->pointer_focus_surface = nullptr;
-        self->pointer_buttons = 0;
-        self->pointer_enter_serial = 0;
-        self->pointer_press_serial = 0;
-        self->current_input_serial = 0;
 
         wl_pointer_destroy(self->pointer);
         self->pointer = nullptr;
@@ -300,6 +306,7 @@ void WaylandSeat::pointer_enter(void* data, wl_pointer* pointer,
     (void)pointer;
     auto* self = static_cast<WaylandSeat*>(data);
 
+    self->ResetPointerState();
     self->pointer_enter_serial = serial;
     self->pointer_focus_surface = surface;
     self->pointer_focus = self->FindWindowBySurface(surface);
@@ -318,15 +325,11 @@ void WaylandSeat::pointer_leave(void* data, wl_pointer* pointer,
     (void)surface;
     auto* self = static_cast<WaylandSeat*>(data);
 
-    if (self->pointer_focus && self->pointer_leave_cb) {
-        self->pointer_leave_cb(self->pointer_focus);
+    auto* oldFocus = self->pointer_focus;
+    self->ResetPointerState();
+    if (oldFocus && self->pointer_leave_cb) {
+        self->pointer_leave_cb(oldFocus);
     }
-    self->pointer_focus = nullptr;
-    self->pointer_focus_surface = nullptr;
-    // A compositor-owned move/resize may take focus and never return the
-    // release event to this surface.
-    self->pointer_buttons = 0;
-    self->pointer_press_serial = 0;
 }
 
 void WaylandSeat::pointer_motion(void* data, wl_pointer* pointer,
@@ -507,15 +510,46 @@ IWaylandWindow* WaylandSeat::FindWindowBySurface(wl_surface* surface) {
 }
 
 // Cursor methods
-void WaylandSeat::SetCursor(wl_surface* cursor_surface, int32_t hotspot_x, int32_t hotspot_y) {
-    if (pointer && pointer_focus_surface) {
-        wl_pointer_set_cursor(pointer, pointer_enter_serial, cursor_surface, hotspot_x, hotspot_y);
+bool WaylandSeat::ApplyCursor(
+    IWaylandWindow* target,
+    INativeCursor::SystemCursorType type)
+{
+    if (!target ||
+        !pointer ||
+        !cursor_renderer ||
+        pointer_focus != target ||
+        pointer_focus_surface != target->GetSurface())
+    {
+        return false;
+    }
+    return cursor_renderer->Apply(pointer, pointer_enter_serial, type);
+}
+
+void WaylandSeat::ResetPointerState(bool clearCurrentInputSerial)
+{
+    pointer_focus = nullptr;
+    pointer_focus_surface = nullptr;
+    pointer_buttons = 0;
+    pointer_enter_serial = 0;
+    pointer_press_serial = 0;
+    if (clearCurrentInputSerial)
+    {
+        current_input_serial = 0;
     }
 }
 
-void WaylandSeat::HideCursor() {
-    if (pointer && pointer_focus_surface) {
-        wl_pointer_set_cursor(pointer, pointer_enter_serial, nullptr, 0, 0);
+void WaylandSeat::ClearFocusFor(IWaylandWindow* window)
+{
+    if (keyboard_focus == window)
+    {
+        keyboard_focus = nullptr;
+    }
+    if (pointer_focus == window)
+    {
+        // Hide() and Destroy() can run inside a pointer or keyboard callback.
+        // Keep the callback-scoped initiating press available so that another
+        // popup opened by the same user action can still issue xdg_popup.grab.
+        ResetPointerState(false);
     }
 }
 

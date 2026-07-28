@@ -14,6 +14,7 @@ namespace wayland {
 
 class WGacView;
 class WGacController;
+class WGacResourceService;
 template<typename TBase>
 class WGacAutomationServiceBase;
 
@@ -40,7 +41,8 @@ protected:
     WGacNativeWindow* parentWindow;
     WGacNativeWindow* popupGrabParent;
     collections::List<WGacNativeWindow*> childWindows;
-    INativeCursor* cursor;
+    INativeCursor* compositionCursor;
+    INativeCursor* borderOverrideCursor;
     Interface* graphicsHandler;
     WindowListenerList listeners;
     WString title;
@@ -99,6 +101,11 @@ protected:
     void SetApplicationId(const AString& applicationId);
     INativeWindowListener::HitTestResult PerformCustomFrameHitTest(int32_t x, int32_t y);
     void ClearPressedCaptionButton();
+    WGacResourceService* GetCursorResourceService();
+    void ApplyEffectiveCursor();
+    void UpdateBorderOverrideCursor(int32_t x, int32_t y);
+    void RefreshBorderOverrideCursor();
+    void ClearBorderOverrideCursor(bool applyEffectiveCursor);
 
 public:
     // Wayland callbacks

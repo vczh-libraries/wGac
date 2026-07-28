@@ -6,8 +6,14 @@ namespace presentation {
 namespace wayland {
 
 WGacResourceService::WGacResourceService()
-    : systemCursors(static_cast<vint>(INativeCursor::SystemCursorType::SmallWaiting) + 1)
+    : systemCursors(INativeCursor::SystemCursorCount)
 {
+    for (vint i = 0; i < systemCursors.Count(); i++)
+    {
+        systemCursors[i] = Ptr(new WGacSystemCursor(
+            static_cast<INativeCursor::SystemCursorType>(i)));
+    }
+
     // Use fontconfig to get system default font
     FcInit();
     FcPattern* pattern = FcPatternCreate();
@@ -51,13 +57,32 @@ WGacResourceService::~WGacResourceService()
 
 INativeCursor* WGacResourceService::GetSystemCursor(INativeCursor::SystemCursorType type)
 {
-    // Return nullptr for now, cursor support needs separate implementation
+    const vint index = static_cast<vint>(type);
+    if (0 <= index && index < systemCursors.Count())
+    {
+        return systemCursors[index].Obj();
+    }
     return nullptr;
 }
 
 INativeCursor* WGacResourceService::GetDefaultSystemCursor()
 {
     return GetSystemCursor(INativeCursor::SystemCursorType::Arrow);
+}
+
+INativeCursor* WGacResourceService::ResolveSystemCursor(INativeCursor* cursor)
+{
+    if (cursor)
+    {
+        for (vint i = 0; i < systemCursors.Count(); i++)
+        {
+            if (systemCursors[i].Obj() == cursor)
+            {
+                return cursor;
+            }
+        }
+    }
+    return GetDefaultSystemCursor();
 }
 
 FontProperties WGacResourceService::GetDefaultFont()

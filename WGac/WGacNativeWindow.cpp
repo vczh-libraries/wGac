@@ -1,6 +1,7 @@
 #include "WGacNativeWindow.h"
 #include "WGacController.h"
 #include "WGacGacView.h"
+#include "Services/WGacResourceService.h"
 #include <cstring>
 #include <stdexcept>
 
@@ -46,7 +47,8 @@ WGacNativeWindow::WGacNativeWindow(WaylandDisplay* _display, INativeWindow::Wind
     , view(nullptr)
     , parentWindow(nullptr)
     , popupGrabParent(nullptr)
-    , cursor(nullptr)
+    , compositionCursor(nullptr)
+    , borderOverrideCursor(nullptr)
     , graphicsHandler(nullptr)
     , mode(_mode)
     , currentWidth(800)
@@ -112,6 +114,10 @@ bool WGacNativeWindow::Create()
 
     view = new WGacView(this, bufferPool);
     display->RegisterWindow(this);
+    if (auto resourceService = GetCursorResourceService())
+    {
+        compositionCursor = resourceService->GetDefaultSystemCursor();
+    }
 
     // Popup/tooltip/menu roles are delayed until Show(), because they require
     // final parent and position information. Libdecor owns every normal role.
@@ -158,6 +164,82 @@ INativeWindowListener::HitTestResult WGacNativeWindow::PerformCustomFrameHitTest
 void WGacNativeWindow::ClearPressedCaptionButton()
 {
     pressedCaptionButton = INativeWindowListener::NoDecision;
+}
+
+WGacResourceService* WGacNativeWindow::GetCursorResourceService()
+{
+    auto controller = GetWGacController();
+    return controller
+        ? dynamic_cast<WGacResourceService*>(controller->ResourceService())
+        : nullptr;
+}
+
+void WGacNativeWindow::ApplyEffectiveCursor()
+{
+    auto seat = display ? display->GetWaylandSeat() : nullptr;
+    auto resourceService = GetCursorResourceService();
+    if (!seat || !resourceService)
+    {
+        return;
+    }
+
+    auto effectiveCursor = borderOverrideCursor
+        ? borderOverrideCursor
+        : compositionCursor;
+    effectiveCursor = resourceService->ResolveSystemCursor(effectiveCursor);
+    const auto type = effectiveCursor->GetSystemCursorType();
+    seat->ApplyCursor(this, type);
+}
+
+void WGacNativeWindow::UpdateBorderOverrideCursor(int32_t x, int32_t y)
+{
+    INativeCursor* newOverride = nullptr;
+    auto resourceService = GetCursorResourceService();
+    if (resourceService &&
+        mode == WindowMode::Normal &&
+        customFrameMode &&
+        sizeBox &&
+        sizeState == WindowSizeState::Restored &&
+        visible &&
+        configured &&
+        libdecorFrame &&
+        libdecor_frame_is_floating(libdecorFrame))
+    {
+        newOverride = GetCursorFromHitTest(
+            PerformCustomFrameHitTest(x, y),
+            resourceService);
+    }
+
+    if (borderOverrideCursor != newOverride)
+    {
+        borderOverrideCursor = newOverride;
+        ApplyEffectiveCursor();
+    }
+}
+
+void WGacNativeWindow::RefreshBorderOverrideCursor()
+{
+    auto seat = display ? display->GetWaylandSeat() : nullptr;
+    if (seat && seat->GetPointerFocus() == this)
+    {
+        UpdateBorderOverrideCursor(
+            seat->GetPointerX(),
+            seat->GetPointerY());
+        ApplyEffectiveCursor();
+    }
+    else
+    {
+        borderOverrideCursor = nullptr;
+    }
+}
+
+void WGacNativeWindow::ClearBorderOverrideCursor(bool applyEffectiveCursor)
+{
+    borderOverrideCursor = nullptr;
+    if (applyEffectiveCursor)
+    {
+        ApplyEffectiveCursor();
+    }
 }
 
 bool WGacNativeWindow::CreateLibdecorFrame()
@@ -242,6 +324,7 @@ bool WGacNativeWindow::CreateLibdecorFrame()
 void WGacNativeWindow::DestroyLibdecorFrame()
 {
     ClearPressedCaptionButton();
+    ClearBorderOverrideCursor(false);
     if (!libdecorFrame)
     {
         return;
@@ -607,6 +690,7 @@ bool WGacNativeWindow::CreateXdgSurface()
 void WGacNativeWindow::Destroy()
 {
     ClearPressedCaptionButton();
+    ClearBorderOverrideCursor(false);
     DismissPopupChildren();
     while (childWindows.Count() > 0)
     {
@@ -829,6 +913,7 @@ void WGacNativeWindow::libdecor_frame_configure(
             self->listeners[i]->Moved();
         }
     }
+    self->RefreshBorderOverrideCursor();
 
     if (firstConfigure && self->visible)
     {
@@ -894,11 +979,11 @@ void WGacNativeWindow::xdg_popup_done(void* data, xdg_popup* /*popup*/)
     // Save parent reference before clearing focus
     auto* parent = self->parentWindow;
 
-    // Clear seat focus references before destroying surfaces
-    // Pass parent to restore pointer focus (Wayland doesn't send pointer_enter
-    // when popup is dismissed and pointer is already over parent)
+    // A destroyed popup cannot borrow its parent's pointer identity: the
+    // popup surface and enter serial are no longer a valid pair. Wait for a
+    // real parent enter before applying the parent's cursor.
     if (self->display && self->display->GetWaylandSeat()) {
-        self->display->GetWaylandSeat()->ClearFocusFor(self, parent);
+        self->display->GetWaylandSeat()->ClearFocusFor(self);
     }
 
     // Reset state so next Show() works correctly
@@ -1098,8 +1183,18 @@ void WGacNativeWindow::SetApplicationId(const AString& applicationId) {
     }
 }
 
-INativeCursor* WGacNativeWindow::GetWindowCursor() { return cursor; }
-void WGacNativeWindow::SetWindowCursor(INativeCursor* _cursor) { cursor = _cursor; }
+INativeCursor* WGacNativeWindow::GetWindowCursor() { return compositionCursor; }
+void WGacNativeWindow::SetWindowCursor(INativeCursor* cursor) {
+    if (auto resourceService = GetCursorResourceService())
+    {
+        compositionCursor = resourceService->ResolveSystemCursor(cursor);
+    }
+    else
+    {
+        compositionCursor = nullptr;
+    }
+    ApplyEffectiveCursor();
+}
 NativePoint WGacNativeWindow::GetCaretPoint() { return caretPoint; }
 void WGacNativeWindow::SetCaretPoint(NativePoint point) {
     caretPoint = point;
@@ -1135,10 +1230,12 @@ INativeWindow::WindowMode WGacNativeWindow::GetWindowMode() { return mode; }
 void WGacNativeWindow::EnableCustomFrameMode() {
     customFrameMode = true;
     UpdatePlatformFrame();
+    RefreshBorderOverrideCursor();
 }
 void WGacNativeWindow::DisableCustomFrameMode() {
     ClearPressedCaptionButton();
     customFrameMode = false;
+    ClearBorderOverrideCursor(true);
     UpdatePlatformFrame();
 }
 bool WGacNativeWindow::IsCustomFrameModeEnabled() { return customFrameMode; }
@@ -1230,9 +1327,11 @@ void WGacNativeWindow::ShowRestored() {
     if (libdecorFrame && GetXdgToplevel()) {
         libdecor_frame_unset_maximized(libdecorFrame);
     }
+    RefreshBorderOverrideCursor();
 }
 void WGacNativeWindow::ShowMaximized() {
     sizeState = WindowSizeState::Maximized;
+    ClearBorderOverrideCursor(true);
     if (!visible)
     {
         Show();
@@ -1243,6 +1342,7 @@ void WGacNativeWindow::ShowMaximized() {
 }
 void WGacNativeWindow::ShowMinimized() {
     sizeState = WindowSizeState::Minimized;
+    ClearBorderOverrideCursor(true);
     if (!visible)
     {
         Show();
@@ -1282,6 +1382,7 @@ bool WGacNativeWindow::RequestClose() {
 
 void WGacNativeWindow::Hide(bool closeWindow) {
     ClearPressedCaptionButton();
+    ClearBorderOverrideCursor(false);
     if (closeWindow) {
         RequestClose();
         return;
@@ -1299,12 +1400,10 @@ void WGacNativeWindow::Hide(bool closeWindow) {
 
     visible = false;
 
-    // Clear seat focus references before destroying surfaces
-    // This prevents dangling pointer issues when compositor sends events
-    // Pass parent to restore pointer focus (Wayland doesn't send pointer_enter
-    // when popup is dismissed and pointer is already over parent)
+    // Clear the focused surface and its enter serial before destroying roles.
+    // A later real enter will establish a valid target/serial pair.
     if (display && display->GetWaylandSeat()) {
-        display->GetWaylandSeat()->ClearFocusFor(this, parentWindow);
+        display->GetWaylandSeat()->ClearFocusFor(this);
     }
 
     // Cancel any pending frame callback
@@ -1406,6 +1505,14 @@ bool WGacNativeWindow::GetSizeBox() { return sizeBox; }
 void WGacNativeWindow::SetSizeBox(bool visible) {
     sizeBox = visible;
     UpdatePlatformFrame();
+    if (sizeBox)
+    {
+        RefreshBorderOverrideCursor();
+    }
+    else
+    {
+        ClearBorderOverrideCursor(true);
+    }
 }
 bool WGacNativeWindow::GetIconVisible() { return false; }
 void WGacNativeWindow::SetIconVisible(bool) { iconVisible = false; }
@@ -1445,10 +1552,23 @@ void WGacNativeWindow::OnMouseEnter(int32_t x, int32_t y) {
     for (auto listener : listeners) {
         listener->MouseMoving(nativeInfo);
     }
+    auto seat = display ? display->GetWaylandSeat() : nullptr;
+    if (!seat ||
+        seat->GetPointerFocus() != this ||
+        seat->GetPointerX() != x ||
+        seat->GetPointerY() != y)
+    {
+        return;
+    }
+    UpdateBorderOverrideCursor(x, y);
+    // wl_pointer.enter makes the pointer image undefined. Always submit the
+    // effective cursor with this enter's serial, even if its type is unchanged.
+    ApplyEffectiveCursor();
 }
 
 void WGacNativeWindow::OnMouseLeave() {
     ClearPressedCaptionButton();
+    ClearBorderOverrideCursor(false);
     for (auto listener : listeners) {
         listener->MouseLeaved();
     }
@@ -1468,6 +1588,15 @@ void WGacNativeWindow::OnMouseMove(const MouseEventInfo& info) {
     for (auto listener : listeners) {
         listener->MouseMoving(nativeInfo);
     }
+    auto seat = display ? display->GetWaylandSeat() : nullptr;
+    if (!seat ||
+        seat->GetPointerFocus() != this ||
+        seat->GetPointerX() != info.x ||
+        seat->GetPointerY() != info.y)
+    {
+        return;
+    }
+    UpdateBorderOverrideCursor(info.x, info.y);
 }
 
 void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {

@@ -7,6 +7,7 @@
 #include <functional>
 #include <string>
 #include <cstdint>
+#include "GacUI.h"
 
 namespace vl {
 namespace presentation {
@@ -14,6 +15,7 @@ namespace wayland {
 
 class WaylandDisplay;
 class IWaylandWindow;
+class WGacCursorRenderer;
 
 // Mouse button codes
 enum class MouseButton {
@@ -93,6 +95,7 @@ private:
     wl_seat* seat = nullptr;
     wl_keyboard* keyboard = nullptr;
     wl_pointer* pointer = nullptr;
+    WGacCursorRenderer* cursor_renderer = nullptr;
     zwp_text_input_v3* text_input = nullptr;
     std::string name;
 
@@ -151,6 +154,7 @@ private:
     MouseEventInfo CreateMouseEventInfo();
     KeyEventInfo CreateKeyEventInfo(uint32_t key, KeyState state);
     IWaylandWindow* FindWindowBySurface(wl_surface* surface);
+    void ResetPointerState(bool clearCurrentInputSerial = true);
 
 public:
     // Seat capability listener
@@ -225,8 +229,9 @@ public:
     bool IsModifierPressed(uint32_t mod) const { return (modifiers & mod) != 0; }
 
     // Cursor
-    void SetCursor(wl_surface* cursor_surface, int32_t hotspot_x, int32_t hotspot_y);
-    void HideCursor();
+    bool ApplyCursor(
+        IWaylandWindow* target,
+        INativeCursor::SystemCursorType type);
 
     // Text input methods
     void EnableTextInput(wl_surface* surface, int32_t x, int32_t y, int32_t width, int32_t height);
@@ -247,27 +252,8 @@ public:
     void SetTextInputPreeditCallback(TextInputPreeditCallback cb) { text_input_preedit_cb = std::move(cb); }
     void SetTextInputCommitCallback(TextInputCommitCallback cb) { text_input_commit_cb = std::move(cb); }
 
-    // Clear focus references when a window is destroyed
-    // If parent is provided, restore pointer focus to parent (for popup dismiss)
-    void ClearFocusFor(IWaylandWindow* window, IWaylandWindow* parent = nullptr) {
-        if (keyboard_focus == window) {
-            keyboard_focus = nullptr;
-        }
-        if (pointer_focus == window) {
-            if (parent) {
-                // Restore pointer focus to parent window
-                // This is needed because Wayland doesn't send pointer_enter
-                // when a popup is dismissed and pointer is already over parent
-                pointer_focus = parent;
-                // Note: pointer_focus_surface should be updated too, but we don't
-                // have easy access to parent's surface here. The next pointer_motion
-                // or pointer_enter will fix it.
-            } else {
-                pointer_focus = nullptr;
-                pointer_focus_surface = nullptr;
-            }
-        }
-    }
+    // Clear focus references when a window is unmapped or destroyed.
+    void ClearFocusFor(IWaylandWindow* window);
 };
 
 } // namespace wayland
