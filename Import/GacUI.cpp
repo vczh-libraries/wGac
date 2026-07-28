@@ -35313,6 +35313,7 @@ GuiRemoteController::INativeInputService
 
 	bool GuiRemoteController::IsKeyPressing(VKEY code)
 	{
+		EnsureControllerConnected();
 		vint idIsKeyPressing = remoteMessages.RequestIOIsKeyPressing(code);
 		bool disconnected = false;
 		remoteMessages.Submit(disconnected);
@@ -35323,6 +35324,7 @@ GuiRemoteController::INativeInputService
 
 	bool GuiRemoteController::IsKeyToggled(VKEY code)
 	{
+		EnsureControllerConnected();
 		vint idIsKeyToggled = remoteMessages.RequestIOIsKeyToggled(code);
 		bool disconnected = false;
 		remoteMessages.Submit(disconnected);
@@ -35502,14 +35504,6 @@ GuiRemoteController::INativeWindowService
 
 	INativeWindow* GuiRemoteController::CreateNativeWindow(INativeWindow::WindowMode windowMode)
 	{
-		// A channel core has already started an external renderer. Process
-		// ControllerConnect before window callbacks can queue client-size or
-		// style notifications. Direct protocols (including the in-process unit
-		// test renderer) connect later from GuiMain and must not wait here.
-		if (remoteProtocol->WaitForControllerConnectBeforeWindowCreation())
-		{
-			EnsureControllerConnected();
-		}
 		CHECK_ERROR(!windowCreated, L"vl::presentation::GuiRemoteController::CreateNativeWindow(INativeWindow::WindowMode)#GuiHostedController is not supposed to call this function for twice.");
 		windowCreated = true;
 		remoteWindow.windowMode = windowMode;
@@ -35563,6 +35557,10 @@ GuiRemoteController::INativeWindowService
 			}
 			bool disconnected = false;
 			remoteMessages.Submit(disconnected);
+			if (remoteProtocol->IsStopped())
+			{
+				connectionStopped = true;
+			}
 			if (timerEnabled && !disconnected)
 			{
 				callbackService.InvokeGlobalTimer();
@@ -37299,6 +37297,7 @@ GuiRemoteGraphicsParagraph
 
 	bool GuiRemoteGraphicsParagraph::EnsureRemoteParagraphSynced()
 	{
+		remote->EnsureControllerConnected();
 		if (!needUpdate)
 		{
 			return id != -1;
@@ -38573,6 +38572,7 @@ GuiRemoteGraphicsImage
 	void GuiRemoteGraphicsImage::EnsureMetadata()
 	{
 		if (status == MetadataStatus::Retrived) return;
+		remote->EnsureControllerConnected();
 		auto arguments = GenerateImageCreation();
 
 		vint idImageCreated = remote->remoteMessages.RequestImageCreated(arguments);
@@ -38784,6 +38784,7 @@ GuiRemoteGraphicsImageService
 #undef ERROR_MESSAGE_PREFIX
 	}
 }
+
 
 /***********************************************************************
 .\PLATFORMPROVIDERS\REMOTE\GUIREMOTEPROTOCOLSCHEMASHARED.CPP
@@ -39096,20 +39097,54 @@ GuiRemoteProtocolAsyncJsonChannel
 			{
 				if (info.name == L"ControllerConnect")
 				{
-					SPIN_LOCK(lockConnection)
+					bool accepted = false;
+					SPIN_LOCK(lockPendingPackages)
 					{
-						connectionCounter++;
-						connectionClientId = senderClientId;
-						connectionAvailable = true;
-					}
-
-					SPIN_LOCK(lockResponses)
-					{
-						if (pendingRequest)
+						SPIN_LOCK(lockConnection)
 						{
-							eventAutoResponses.Signal();
+							ReceivedPackage receivedPackage;
+							receivedPackage.senderClientId = senderClientId;
+							receivedPackage.package = package;
+							if (expectedConnectionClientId == -1 || expectedConnectionClientId != senderClientId)
+							{
+								pendingConnectionEvents.Set(senderClientId, receivedPackage);
+							}
+
+							if (expectedConnectionClientId == -1 || expectedConnectionClientId == senderClientId)
+							{
+								pendingPackages.Clear();
+								connectionCounter++;
+								connectionClientId = senderClientId;
+								connectionAvailable = true;
+								accepted = true;
+
+								SPIN_LOCK(lockEvents)
+								{
+									queuedEvents.Add(receivedPackage);
+								}
+
+								SPIN_LOCK(lockResponses)
+								{
+									queuedResponses.Clear();
+									if (
+										pendingRequest &&
+										pendingRequest->connectionCounter != connectionCounter
+										)
+									{
+										eventAutoResponses.Signal();
+									}
+								}
+							}
 						}
 					}
+
+					if (!accepted)
+					{
+						return;
+					}
+
+					ScheduleProcessRemoteEvents();
+					break;
 				}
 
 				ReceivedPackage receivedPackage;
@@ -39141,6 +39176,84 @@ GuiRemoteProtocolAsyncJsonChannel
 			CHECK_FAIL(ERROR_MESSAGE_PREFIX L"Only responses and events are expected.");
 		}
 #undef ERROR_MESSAGE_PREFIX
+	}
+
+	void GuiRemoteProtocolAsyncJsonChannel::PrepareRendererConnection(vint clientId)
+	{
+		bool connectionChanged = false;
+		bool scheduleEvents = false;
+		SPIN_LOCK(lockPendingPackages)
+		{
+			SPIN_LOCK(lockConnection)
+			{
+				auto expectationChanged = expectedConnectionClientId != clientId;
+				expectedConnectionClientId = clientId;
+
+				auto preserveConnection =
+					clientId != -1 &&
+					connectionClientId == clientId &&
+					connectionAvailable;
+				if (!preserveConnection)
+				{
+					vint pendingIndex = pendingConnectionEvents.Keys().IndexOf(clientId);
+					connectionChanged =
+						expectationChanged ||
+						connectionClientId != -1 ||
+						connectionAvailable ||
+						pendingIndex != -1;
+					if (connectionChanged)
+					{
+						pendingPackages.Clear();
+						connectionCounter++;
+						connectionClientId = -1;
+						connectionAvailable = false;
+					}
+
+					SPIN_LOCK(lockEvents)
+					{
+						for (vint i = queuedEvents.Count() - 1; i >= 0; i--)
+						{
+							ChannelPackageInfo info;
+							Ptr<glr::json::JsonNode> jsonArguments;
+							JsonChannelUnpack(queuedEvents[i].package, info, jsonArguments);
+							if (info.name == L"ControllerConnect")
+							{
+								queuedEvents.RemoveAt(i);
+							}
+						}
+
+						if (pendingIndex != -1)
+						{
+							auto pendingEvent = pendingConnectionEvents.Values()[pendingIndex];
+							connectionClientId = clientId;
+							connectionAvailable = true;
+							queuedEvents.Add(pendingEvent);
+							scheduleEvents = true;
+						}
+					}
+
+					if (connectionChanged)
+					{
+						SPIN_LOCK(lockResponses)
+						{
+							queuedResponses.Clear();
+							if (
+								pendingRequest &&
+								pendingRequest->connectionCounter != connectionCounter
+								)
+							{
+								eventAutoResponses.Signal();
+							}
+						}
+					}
+				}
+				pendingConnectionEvents.Clear();
+			}
+		}
+		if (scheduleEvents)
+		{
+			ScheduleProcessRemoteEvents();
+		}
 	}
 
 	GuiRemoteProtocolAsyncJsonChannel::GuiRemoteProtocolAsyncJsonChannel(IJsonChannel* _channel, IGuiRemoteEventProcessor* _remoteEventProcessor)
@@ -39255,6 +39368,18 @@ GuiRemoteProtocolAsyncJsonChannel
 			pendingRequest = requestGroup;
 		}
 
+		// A new renderer could connect after the connection counter was
+		// captured but before pendingRequest became visible to OnRead.
+		// Recheck after installing it so either this path or OnRead wakes
+		// the waiter when the batch belongs to an obsolete connection.
+		SPIN_LOCK(lockConnection)
+		{
+			if (requestGroup->connectionCounter != connectionCounter || !connectionAvailable)
+			{
+				eventAutoResponses.Signal();
+			}
+		}
+
 		for (auto&& queuedPackage : packages)
 		{
 			if (queuedPackage.receiverClientId)
@@ -39281,33 +39406,40 @@ GuiRemoteProtocolAsyncJsonChannel
 		}
 
 		eventAutoResponses.Wait();
+		List<ReceivedPackage> responses;
 		SPIN_LOCK(lockConnection)
 		{
 			if (requestGroup->connectionCounter != connectionCounter || !connectionAvailable)
 			{
 				disconnected = true;
 			}
-		}
 
-		List<ReceivedPackage> responses;
-		SPIN_LOCK(lockResponses)
-		{
-			if (!disconnected)
+			SPIN_LOCK(lockResponses)
 			{
-				for (vint id : requestGroup->requestIds)
+				if (!disconnected)
 				{
-					responses.Add(queuedResponses[id]);
-					queuedResponses.Remove(id);
+					for (vint id : requestGroup->requestIds)
+					{
+						responses.Add(queuedResponses[id]);
+						queuedResponses.Remove(id);
+					}
 				}
+				pendingRequest = nullptr;
+				queuedResponses.Clear();
+				eventAutoResponses.Unsignal();
 			}
-			pendingRequest = nullptr;
-			queuedResponses.Clear();
 		}
 
 		for (auto&& response : responses)
 		{
 			reader->OnRead(response.senderClientId, response.package);
 		}
+
+		// Renderer events caused by this batch are received before its
+		// responses, but they are normally deferred to a UI task. Deliver
+		// them while the protocol filter is still submitting so a following
+		// synchronous response remains the authoritative final state.
+		ProcessChannelEvents();
 #undef ERROR_MESSAGE_PREFIX
 	}
 
@@ -39726,21 +39858,28 @@ GuiRemoteProtocolCoreChannel
 #undef MESSAGE_RES
 #undef MESSAGE_NORES
 
-	void GuiRemoteProtocolCoreChannel::Write(Ptr<glr::json::JsonObject> package)
+	void GuiRemoteProtocolCoreChannel::Write(const ChannelPackageInfo& info, Ptr<glr::json::JsonObject> package)
 	{
-		auto receiverClientId = GetRendererClientId();
-		if (receiverClientId == -1)
+		SPIN_LOCK(lockRendererConnection)
 		{
-			SPIN_LOCK(lockPackagesBeforeRenderer)
-			{
-				packagesBeforeRenderer.Add(package);
-			}
-		}
-		else
-		{
+			auto receiverClientId = GetRendererClientId();
 			List<JsonPackage> packages;
 			SPIN_LOCK(lockPackagesBeforeRenderer)
 			{
+				if (waitingForConnectionEstablished)
+				{
+					if (info.name != L"ControllerConnectionEstablished")
+					{
+						return;
+					}
+					waitingForConnectionEstablished = false;
+				}
+
+				if (receiverClientId == -1)
+				{
+					packagesBeforeRenderer.Add(package);
+					return;
+				}
 				packages = std::move(packagesBeforeRenderer);
 			}
 
@@ -39762,6 +39901,34 @@ GuiRemoteProtocolCoreChannel
 		return rendererClientId.load();
 	}
 
+	bool GuiRemoteProtocolCoreChannel::CheckRendererUnavailable(vint clientId)
+	{
+		bool unavailable = false;
+		bool notifyDisconnect = false;
+		SPIN_LOCK(lockRendererConnection)
+		{
+			unavailable =
+				clientId != GetRendererClientId() ||
+				rendererUnavailable.load() == 1;
+			if (
+				rendererUnavailable.load() == 1 &&
+				rendererDisconnectNotified.load() == 0
+				)
+			{
+				rendererDisconnectNotified.store(1);
+				notifyDisconnect = true;
+			}
+		}
+
+		if (notifyDisconnect)
+		{
+			ChannelPackageInfo info{ ChannelPackageSemantic::Event, -1, WString::Unmanaged(L"ControllerDisconnect") };
+			BeforeOnRead(info);
+			events->OnControllerDisconnect();
+		}
+		return unavailable;
+	}
+
 	void GuiRemoteProtocolCoreChannel::OnRead(vint senderClientId, const JsonPackage& package)
 	{
 #define ERROR_MESSAGE_PREFIX L"vl::presentation::remoteprotocol::channeling::GuiRemoteProtocolCoreChannel::OnRead(vint, const JsonPackage&)#"
@@ -39773,15 +39940,41 @@ GuiRemoteProtocolCoreChannel
 
 		if (info.semantic == ChannelPackageSemantic::Event)
 		{
-			if (info.name == L"ControllerConnect")
+			bool accepted = false;
+			SPIN_LOCK(lockRendererConnection)
 			{
-				SetRendererClientId(senderClientId);
+				if (info.name == L"ControllerConnect")
+				{
+					auto expectedClientId = expectedRendererClientId.load();
+					if (expectedClientId != -1 && expectedClientId != senderClientId)
+					{
+						return;
+					}
+
+					SPIN_LOCK(lockPackagesBeforeRenderer)
+					{
+						packagesBeforeRenderer.Clear();
+						waitingForConnectionEstablished = true;
+					}
+					SetRendererClientId(senderClientId);
+					rendererUnavailable.store(0);
+					rendererDisconnectNotified.store(0);
+					accepted = true;
+				}
+				else if (info.name == L"ControllerDisconnect" && GetRendererClientId() == senderClientId)
+				{
+					SetRendererClientId(-1);
+					rendererUnavailable.store(1);
+					rendererDisconnectNotified.store(1);
+					accepted = true;
+				}
+				else if (GetRendererClientId() == senderClientId)
+				{
+					accepted = true;
+				}
 			}
-			else if (info.name == L"ControllerDisconnect" && GetRendererClientId() == senderClientId)
-			{
-				SetRendererClientId(-1);
-			}
-			else if (GetRendererClientId() != senderClientId)
+
+			if (!accepted)
 			{
 				return;
 			}
@@ -39799,7 +39992,13 @@ GuiRemoteProtocolCoreChannel
 		}
 		else if (info.semantic == ChannelPackageSemantic::Response)
 		{
-			if (GetRendererClientId() != senderClientId)
+			bool accepted = false;
+			SPIN_LOCK(lockRendererConnection)
+			{
+				accepted = GetRendererClientId() == senderClientId;
+			}
+
+			if (!accepted)
 			{
 				return;
 			}
@@ -39829,7 +40028,7 @@ GuiRemoteProtocolCoreChannel
 		ChannelPackageInfo info{ChannelPackageSemantic::Message, -1, WString::Unmanaged(L ## #NAME)};\
 		JsonChannelPack(info, {}, package);\
 		BeforeWrite(info);\
-		Write(package);\
+		Write(info, package);\
 	}\
 
 #define MESSAGE_NOREQ_RES(NAME, REQUEST, RESPONSE)\
@@ -39839,7 +40038,7 @@ GuiRemoteProtocolCoreChannel
 		ChannelPackageInfo info{ChannelPackageSemantic::Request, id, WString::Unmanaged(L ## #NAME)};\
 		JsonChannelPack(info, {}, package);\
 		BeforeWrite(info);\
-		Write(package);\
+		Write(info, package);\
 	}\
 
 #define MESSAGE_REQ_NORES(NAME, REQUEST, RESPONSE)\
@@ -39849,7 +40048,7 @@ GuiRemoteProtocolCoreChannel
 		ChannelPackageInfo info{ChannelPackageSemantic::Message, -1, WString::Unmanaged(L ## #NAME)};\
 		JsonChannelPack(info, ConvertCustomTypeToJson(arguments), package);\
 		BeforeWrite(info);\
-		Write(package);\
+		Write(info, package);\
 	}\
 
 #define MESSAGE_REQ_RES(NAME, REQUEST, RESPONSE)\
@@ -39859,7 +40058,7 @@ GuiRemoteProtocolCoreChannel
 		ChannelPackageInfo info{ChannelPackageSemantic::Request, id, WString::Unmanaged(L ## #NAME)};\
 		JsonChannelPack(info, ConvertCustomTypeToJson(arguments), package);\
 		BeforeWrite(info);\
-		Write(package);\
+		Write(info, package);\
 	}\
 
 #define MESSAGE_HANDLER(NAME, REQUEST, RESPONSE, REQTAG, RESTAG, ...)	MESSAGE_ ## REQTAG ## _ ## RESTAG(NAME, REQUEST, RESPONSE)
@@ -39870,12 +40069,11 @@ GuiRemoteProtocolCoreChannel
 #undef MESSAGE_NOREQ_RES
 #undef MESSAGE_NOREQ_NORES
 
-	GuiRemoteProtocolCoreChannel::GuiRemoteProtocolCoreChannel(IJsonChannelClient* _client, IJsonChannel* _channel, const WString& _executablePath, IGuiRemoteEventProcessor* _eventProcessor, bool _waitForControllerConnectBeforeWindowCreation)
+	GuiRemoteProtocolCoreChannel::GuiRemoteProtocolCoreChannel(IJsonChannelClient* _client, IJsonChannel* _channel, const WString& _executablePath, IGuiRemoteEventProcessor* _eventProcessor)
 		: client(_client)
 		, channel(_channel)
 		, eventProcessor(_eventProcessor)
 		, executablePath(_executablePath)
-		, waitForControllerConnectBeforeWindowCreation(_waitForControllerConnectBeforeWindowCreation)
 	{
 #define EVENT_NOREQ(NAME, REQUEST)					onReadEventHandlers.Add(WString::Unmanaged(L ## #NAME), &GuiRemoteProtocolCoreChannel::OnRead_Event_ ## NAME);
 #define EVENT_REQ(NAME, REQUEST)					onReadEventHandlers.Add(WString::Unmanaged(L ## #NAME), &GuiRemoteProtocolCoreChannel::OnRead_Event_ ## NAME);
@@ -39910,11 +40108,11 @@ GuiRemoteProtocolCoreChannel
 		return executablePath;
 	}
 
-	bool GuiRemoteProtocolCoreChannel::WaitForControllerConnectBeforeWindowCreation()
+	bool GuiRemoteProtocolCoreChannel::IsStopped()
 	{
-		return waitForControllerConnectBeforeWindowCreation;
+		return client->GetStatus() == inter_process::ClientStatus::Disconnected;
 	}
-	
+
 	void GuiRemoteProtocolCoreChannel::Submit(bool& disconnected)
 	{
 		auto receiverClientId = GetRendererClientId();
@@ -39924,17 +40122,53 @@ GuiRemoteProtocolCoreChannel
 			packages = std::move(packagesBeforeRenderer);
 		}
 
+		if (client->GetStatus() == inter_process::ClientStatus::Disconnected)
+		{
+			disconnected = true;
+			return;
+		}
+
+		if (CheckRendererUnavailable(receiverClientId))
+		{
+			disconnected = true;
+			return;
+		}
+
 		if (receiverClientId == -1)
 		{
 			disconnected = false;
 			return;
 		}
 
-		for (auto&& package : packages)
+		if (packages.Count() > 0)
 		{
-			channel->SendToClient(receiverClientId, package);
+			bool sent = false;
+			SPIN_LOCK(lockRendererConnection)
+			{
+				if (
+					receiverClientId == GetRendererClientId() &&
+					rendererUnavailable.load() == 0
+					)
+				{
+					for (auto&& package : packages)
+					{
+						channel->SendToClient(receiverClientId, package);
+					}
+					sent = true;
+				}
+			}
+			if (!sent)
+			{
+				CheckRendererUnavailable(receiverClientId);
+				disconnected = true;
+				return;
+			}
 		}
 		channel->BatchWrite(disconnected);
+		if (CheckRendererUnavailable(receiverClientId))
+		{
+			disconnected = true;
+		}
 	}
 
 	IGuiRemoteEventProcessor* GuiRemoteProtocolCoreChannel::GetRemoteEventProcessor()
@@ -39942,11 +40176,53 @@ GuiRemoteProtocolCoreChannel
 		return eventProcessor;
 	}
 
+	void GuiRemoteProtocolCoreChannel::PrepareRendererConnection(vint clientId)
+	{
+		SPIN_LOCK(lockRendererConnection)
+		{
+			expectedRendererClientId.store(clientId);
+
+			auto currentClientId = GetRendererClientId();
+			if (currentClientId != -1 && currentClientId != clientId)
+			{
+				rendererUnavailable.store(1);
+				rendererDisconnectNotified.store(0);
+				SetRendererClientId(-1);
+			}
+		}
+
+		if (auto asyncChannel = dynamic_cast<GuiRemoteProtocolAsyncJsonChannel*>(channel))
+		{
+			asyncChannel->PrepareRendererConnection(clientId);
+		}
+	}
+
 	void GuiRemoteProtocolCoreChannel::DetachRenderer(vint clientId)
 	{
-		if (GetRendererClientId() == clientId)
+		bool detached = false;
+		SPIN_LOCK(lockRendererConnection)
 		{
-			SetRendererClientId(-1);
+			if (
+				GetRendererClientId() == clientId ||
+				expectedRendererClientId.load() == clientId
+				)
+			{
+				detached = true;
+				expectedRendererClientId.store(-1);
+				if (GetRendererClientId() == clientId)
+				{
+					rendererUnavailable.store(1);
+					rendererDisconnectNotified.store(0);
+					SetRendererClientId(-1);
+				}
+			}
+		}
+		if (detached)
+		{
+			if (auto asyncChannel = dynamic_cast<GuiRemoteProtocolAsyncJsonChannel*>(channel))
+			{
+				asyncChannel->PrepareRendererConnection(-1);
+			}
 		}
 	}
 
@@ -40204,6 +40480,12 @@ GuiRemoteEventFilter
 
 	GuiRemoteEventFilter::~GuiRemoteEventFilter()
 	{
+	}
+
+	void GuiRemoteEventFilter::DiscardResponses()
+	{
+		responseIds.Clear();
+		filteredResponses.Clear();
 	}
 
 	void GuiRemoteEventFilter::ProcessResponses()
@@ -40534,7 +40816,7 @@ GuiRemoteProtocolFilter
 		GuiRemoteProtocolCombinator<GuiRemoteEventFilter>::Submit(disconnected);
 		if (disconnected)
 		{
-			eventCombinator.responseIds.Clear();
+			eventCombinator.DiscardResponses();
 		}
 		else
 		{
@@ -40545,6 +40827,7 @@ GuiRemoteProtocolFilter
 #undef ERROR_MESSAGE_PREFIX
 	}
 }
+
 
 /***********************************************************************
 .\PLATFORMPROVIDERS\REMOTE\GUIREMOTEPROTOCOL_FILTERVERIFIER.CPP
@@ -40766,15 +41049,27 @@ GuiRemoteWindow
 			remoteMessages.RequestWindowNotifySet ## STYLE(VALUE);\
 		}\
 
-	void GuiRemoteWindow::RequestGetBounds()
+	void GuiRemoteWindow::RequestGetBounds(bool finishReconstructingState)
 	{
 		remote->EnsureControllerConnected();
 		vint idGetBounds = remoteMessages.RequestWindowGetBounds();
 		bool disconnected = false;
 		remoteMessages.Submit(disconnected);
-		if (disconnected) return;
+		if (disconnected)
+		{
+			if (finishReconstructingState)
+			{
+				reconstructingState = false;
+			}
+			return;
+		}
 		sizingConfigInvalidated = false;
-		OnWindowBoundsUpdated(remoteMessages.RetrieveWindowGetBounds(idGetBounds));
+		auto bounds = remoteMessages.RetrieveWindowGetBounds(idGetBounds);
+		if (finishReconstructingState)
+		{
+			reconstructingState = false;
+		}
+		OnWindowBoundsUpdated(bounds);
 	}
 
 	void GuiRemoteWindow::Opened()
@@ -40875,19 +41170,22 @@ GuiRemoteWindow (events)
 		scalingY = remote->remoteScreenConfig.scalingY;
 
 		auto bounds = remoteWindowSizingConfig.bounds;
-		if (remote->applicationRunning)
+		bool reconstructing = remote->applicationRunning;
+		if (reconstructing)
 		{
 			// A replacement renderer creates its native window with platform
 			// defaults. Restore the application frame style before applying
 			// the saved bounds so client-size calculations use the right frame.
 			// Style changes report the renderer's temporary bounds back to the
-			// core, so keep the saved bounds in a local variable.
+			// core. Keep the saved bounds in a local variable and ignore those
+			// temporary updates until the saved bounds are restored.
+			reconstructingState = true;
 			SubmitStateAfterControllerConnect();
 		}
 
 		sizingConfigInvalidated = true;
 		remoteMessages.RequestWindowNotifySetBounds(bounds);
-		RequestGetBounds();
+		RequestGetBounds(reconstructing);
 
 		// TODO:
 		//   This is a workaround to call GuiWindow::UpdateCustomFramePadding
@@ -40914,6 +41212,11 @@ GuiRemoteWindow (events)
 
 	void GuiRemoteWindow::OnWindowBoundsUpdated(const remoteprotocol::WindowSizingConfig& arguments)
 	{
+		if (reconstructingState)
+		{
+			return;
+		}
+
 		bool callMoved = false;
 		if (remoteWindowSizingConfig.bounds != arguments.bounds ||
 			remoteWindowSizingConfig.clientBounds != arguments.clientBounds)

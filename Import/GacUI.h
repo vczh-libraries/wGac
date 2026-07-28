@@ -22662,10 +22662,6 @@ IGuiRemoteProtocolConfig
 	{
 	public:
 		virtual WString			GetExecutablePath() = 0;
-		virtual bool			WaitForControllerConnectBeforeWindowCreation()
-		{
-			return false;
-		}
 	};
 
 /***********************************************************************
@@ -22689,6 +22685,7 @@ IGuiRemoteProtocol
 	public:
 		virtual void						Initialize(IGuiRemoteProtocolEvents* events) = 0;
 		virtual void						Submit(bool& disconnected) = 0;
+		virtual bool						IsStopped() { return false; }
 		virtual IGuiRemoteEventProcessor*	GetRemoteEventProcessor() = 0;
 	};
 
@@ -22722,11 +22719,6 @@ IGuiRemoteProtocol
 			return targetProtocol->GetExecutablePath();
 		}
 
-		bool WaitForControllerConnectBeforeWindowCreation() override
-		{
-			return targetProtocol->WaitForControllerConnectBeforeWindowCreation();
-		}
-
 		void Initialize(IGuiRemoteProtocolEvents* _events) override
 		{
 			eventCombinator.targetEvents = _events;
@@ -22736,6 +22728,11 @@ IGuiRemoteProtocol
 		void Submit(bool& disconnected) override
 		{
 			targetProtocol->Submit(disconnected);
+		}
+
+		bool IsStopped() override
+		{
+			return targetProtocol->IsStopped();
 		}
 
 		IGuiRemoteEventProcessor* GetRemoteEventProcessor() override
@@ -22764,11 +22761,6 @@ IGuiRemoteProtocol
 			return targetProtocol->GetExecutablePath();
 		}
 
-		bool WaitForControllerConnectBeforeWindowCreation() override
-		{
-			return targetProtocol->WaitForControllerConnectBeforeWindowCreation();
-		}
-
 		void Initialize(IGuiRemoteProtocolEvents* _events) override
 		{
 			events = _events;
@@ -22778,6 +22770,11 @@ IGuiRemoteProtocol
 		void Submit(bool& disconnected) override
 		{
 			targetProtocol->Submit(disconnected);
+		}
+
+		bool IsStopped() override
+		{
+			return targetProtocol->IsStopped();
 		}
 
 		IGuiRemoteEventProcessor* GetRemoteEventProcessor() override
@@ -22936,10 +22933,14 @@ GuiRemoteProtocolCoreChannel
 		IGuiRemoteProtocolEvents*					events = nullptr;
 		IGuiRemoteEventProcessor*					eventProcessor = nullptr;
 		WString										executablePath;
-		bool										waitForControllerConnectBeforeWindowCreation = false;
 		atomic_vint									rendererClientId = -1;
+		atomic_vint									expectedRendererClientId = -1;
+		atomic_vint									rendererUnavailable = 0;
+		atomic_vint									rendererDisconnectNotified = 0;
+		SpinLock									lockRendererConnection;
 		SpinLock									lockPackagesBeforeRenderer;
 		collections::List<JsonPackage>				packagesBeforeRenderer;
+		bool										waitingForConnectionEstablished = false;
 
 		using OnReadEventHandler = void (GuiRemoteProtocolCoreChannel::*)(Ptr<glr::json::JsonNode>);
 		using OnReadEventHandlerMap = collections::Dictionary<WString, OnReadEventHandler>;
@@ -22965,9 +22966,10 @@ GuiRemoteProtocolCoreChannel
 #undef MESSAGE_RES
 #undef MESSAGE_NORES
 
-		void						Write(Ptr<glr::json::JsonObject> package);
+		void						Write(const ChannelPackageInfo& info, Ptr<glr::json::JsonObject> package);
 		void						SetRendererClientId(vint clientId);
 		vint						GetRendererClientId();
+		bool						CheckRendererUnavailable(vint clientId);
 		void						OnRead(vint senderClientId, const JsonPackage& package) override;
 
 	public:
@@ -22984,7 +22986,7 @@ GuiRemoteProtocolCoreChannel
 #undef MESSAGE_NOREQ_RES
 #undef MESSAGE_NOREQ_NORES
 
-		GuiRemoteProtocolCoreChannel(IJsonChannelClient* _client, IJsonChannel* _channel, const WString& _executablePath, IGuiRemoteEventProcessor* _eventProcessor = nullptr, bool _waitForControllerConnectBeforeWindowCreation = false);
+		GuiRemoteProtocolCoreChannel(IJsonChannelClient* _client, IJsonChannel* _channel, const WString& _executablePath, IGuiRemoteEventProcessor* _eventProcessor = nullptr);
 		~GuiRemoteProtocolCoreChannel();
 
 		vl::Event<void(const ChannelPackageInfo&)>		BeforeWrite;
@@ -22992,9 +22994,10 @@ GuiRemoteProtocolCoreChannel
 
 		void											Initialize(IGuiRemoteProtocolEvents* _events) override;
 		WString											GetExecutablePath() override;
-		bool											WaitForControllerConnectBeforeWindowCreation() override;
 		void											Submit(bool& disconnected) override;
+		bool											IsStopped() override;
 		IGuiRemoteEventProcessor*						GetRemoteEventProcessor() override;
+		void											PrepareRendererConnection(vint clientId);
 		void											DetachRenderer(vint clientId);
 	};
 
@@ -23132,7 +23135,9 @@ GuiRemoteProtocolAsyncJsonChannel
 		SpinLock											lockConnection;
 		vint												connectionCounter = 0;
 		vint												connectionClientId = -1;
+		vint												expectedConnectionClientId = -1;
 		bool												connectionAvailable = false;
+		collections::Dictionary<vint, ReceivedPackage>		pendingConnectionEvents;
 
 		bool												AreCurrentPendingRequestGroupSatisfied(bool disconnected);
 		void												ScheduleProcessRemoteEvents();
@@ -23153,6 +23158,7 @@ GuiRemoteProtocolAsyncJsonChannel
 		void												BroadcastFromClient(const JsonPackage& package, const collections::List<vint>& blockedReceivers) override;
 		void												BatchWrite(bool& disconnected) override;
 
+		void												PrepareRendererConnection(vint clientId);
 		IGuiRemoteEventProcessor*							GetRemoteEventProcessor();
 	};
 }
@@ -23473,6 +23479,7 @@ GuiRemoteEventFilter
 		GuiRemoteEventFilter();
 		~GuiRemoteEventFilter();
 	
+		void													DiscardResponses();
 		void													ProcessResponses();	
 		void													ProcessEvents();
 
@@ -23547,6 +23554,7 @@ GuiRemoteProtocolFilter
 }
 
 #endif
+
 
 /***********************************************************************
 .\PLATFORMPROVIDERS\REMOTE\PROTOCOL\FRAMEOPERATIONS\GUIREMOTEPROTOCOLSCHEMA_FRAMEOPERATIONS.H
@@ -29081,6 +29089,7 @@ GuiRemoteWindow
 		remoteprotocol::WindowSizingConfig					remoteWindowSizingConfig;
 		NativeSize											suggestedMinClientSize;
 		bool												sizingConfigInvalidated = false;
+		bool												reconstructingState = false;
 		double												scalingX = 1;
 		double												scalingY = 1;
 
@@ -29104,7 +29113,7 @@ GuiRemoteWindow
 		bool							statusActivated = false;
 		bool							statusCapturing = false;
 
-		void							RequestGetBounds();
+		void							RequestGetBounds(bool finishReconstructingState = false);
 		void							Opened();
 		void							SetActivated(bool activated);
 		void							ShowWithSizeState(bool activate, INativeWindow::WindowSizeState sizeState);
@@ -29240,6 +29249,7 @@ GuiRemoteController
 		friend class GuiRemoteEvents;
 		friend class GuiRemoteWindow;
 		friend class GuiRemoteGraphicsImage;
+		friend class elements::GuiRemoteGraphicsParagraph;
 		friend class elements::GuiRemoteGraphicsRenderTarget;
 		friend class elements::GuiRemoteGraphicsResourceManager;
 		using CursorMap = collections::Dictionary<INativeCursor::SystemCursorType, Ptr<INativeCursor>>;
