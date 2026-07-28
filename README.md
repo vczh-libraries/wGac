@@ -144,8 +144,12 @@ Follow [GacUI's native-renderer verification guide](../GacUI/DebugRemoteProtocol
 
 ## Known Limitations
 
-- The native FileChooser portal is implemented for open and save dialogs. Native color and font dialogs are not yet implemented.
-- Message boxes currently use the existing fallback behavior.
+- Native Dialogs:
+  - The native FileChooser portal is implemented for open and save dialogs.
+  - Message box not implemented.
+  - Color picker not implemented.
+  - Font picker not implemented.
+  - Needs to update `Tools/Copilot/Guidelines/Running-ComputerUse.md` when they are done.
 - Wayland does not allow clients to position normal top-level windows globally; placement requests are compositor-dependent.
 - libdecor has no platform-frame window-icon API, so `IconVisible` is unsupported and always reports `false`.
 - libdecor cannot independently hide the maximize control. Its maximize affordance follows `SizeBox` (the frame's resize capability); `MaximizedBox` retains its requested value but cannot override that platform limitation.
