@@ -1622,7 +1622,7 @@ void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
         }
 
         hitTestResult = PerformCustomFrameHitTest(info.x, info.y);
-        if (pressed)
+        if (pressed && !info.doubleClick)
         {
             switch (hitTestResult)
             {
@@ -1670,6 +1670,7 @@ void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
     const bool canRequestInteractiveAction =
         leftButton &&
         pressed &&
+        !info.doubleClick &&
         buttonPressSerial != 0 &&
         mode == WindowMode::Normal &&
         customFrameMode &&
@@ -1711,11 +1712,23 @@ void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
     for (auto listener : listeners) {
         if (pressed) {
             if (info.button == static_cast<uint32_t>(MouseButton::Left)) {
-                listener->LeftButtonDown(nativeInfo);
+                if (info.doubleClick) {
+                    listener->LeftButtonDoubleClick(nativeInfo);
+                } else {
+                    listener->LeftButtonDown(nativeInfo);
+                }
             } else if (info.button == static_cast<uint32_t>(MouseButton::Right)) {
-                listener->RightButtonDown(nativeInfo);
+                if (info.doubleClick) {
+                    listener->RightButtonDoubleClick(nativeInfo);
+                } else {
+                    listener->RightButtonDown(nativeInfo);
+                }
             } else if (info.button == static_cast<uint32_t>(MouseButton::Middle)) {
-                listener->MiddleButtonDown(nativeInfo);
+                if (info.doubleClick) {
+                    listener->MiddleButtonDoubleClick(nativeInfo);
+                } else {
+                    listener->MiddleButtonDown(nativeInfo);
+                }
             }
         } else {
             if (info.button == static_cast<uint32_t>(MouseButton::Left)) {

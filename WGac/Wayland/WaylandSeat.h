@@ -38,6 +38,7 @@ struct MouseEventInfo {
     uint32_t button = 0;
     // Nonzero only for the physical button-press callback that owns this serial.
     uint32_t buttonPressSerial = 0;
+    bool doubleClick = false;
     bool left = false;
     bool right = false;
     bool middle = false;
@@ -123,6 +124,11 @@ private:
     uint32_t current_input_serial = 0;
     uint32_t pointer_press_serial = 0;
     uint32_t keyboard_press_serial = 0;
+    IWaylandWindow* previous_click_target = nullptr;
+    uint32_t previous_click_button = 0;
+    uint32_t previous_click_time = 0;
+    int32_t previous_click_x = 0;
+    int32_t previous_click_y = 0;
 
     // Keyboard repeat
     int32_t repeat_rate = 25;   // chars per second

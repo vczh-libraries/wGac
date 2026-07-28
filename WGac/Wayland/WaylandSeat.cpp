@@ -350,15 +350,46 @@ void WaylandSeat::pointer_motion(void* data, wl_pointer* pointer,
 void WaylandSeat::pointer_button(void* data, wl_pointer* pointer,
                                   uint32_t serial, uint32_t time, uint32_t button, uint32_t state) {
     (void)pointer;
-    (void)time;
     auto* self = static_cast<WaylandSeat*>(data);
 
     self->last_user_action_serial = serial;
 
     bool pressed = (state == WL_POINTER_BUTTON_STATE_PRESSED);
+    bool doubleClick = false;
     if (pressed)
     {
         self->pointer_press_serial = serial;
+
+        // wl_pointer reports individual presses without a click count.
+        // Match native GacUI providers by recognizing the second press here.
+        constexpr uint32_t doubleClickInterval = 500;
+        constexpr int64_t doubleClickDistance = 8;
+        const auto deltaX =
+            static_cast<int64_t>(self->previous_click_x) -
+            static_cast<int64_t>(self->pointer_x);
+        const auto deltaY =
+            static_cast<int64_t>(self->previous_click_y) -
+            static_cast<int64_t>(self->pointer_y);
+
+        doubleClick =
+            self->previous_click_target == self->pointer_focus &&
+            self->previous_click_button == button &&
+            time - self->previous_click_time <= doubleClickInterval &&
+            -doubleClickDistance <= deltaX && deltaX <= doubleClickDistance &&
+            -doubleClickDistance <= deltaY && deltaY <= doubleClickDistance;
+
+        if (doubleClick)
+        {
+            self->previous_click_target = nullptr;
+        }
+        else
+        {
+            self->previous_click_target = self->pointer_focus;
+            self->previous_click_button = button;
+            self->previous_click_time = time;
+            self->previous_click_x = self->pointer_x;
+            self->previous_click_y = self->pointer_y;
+        }
     }
 
     // Update button state
@@ -372,6 +403,7 @@ void WaylandSeat::pointer_button(void* data, wl_pointer* pointer,
         MouseEventInfo info = self->CreateMouseEventInfo();
         info.button = button;
         info.buttonPressSerial = pressed ? serial : 0;
+        info.doubleClick = doubleClick;
         // GacUI buttons execute on release. Keep using the initiating press
         // serial for that callback; never substitute pointer-enter or
         // button-release serials for xdg_popup.grab.
@@ -532,6 +564,7 @@ void WaylandSeat::ResetPointerState(bool clearCurrentInputSerial)
     pointer_buttons = 0;
     pointer_enter_serial = 0;
     pointer_press_serial = 0;
+    previous_click_target = nullptr;
     if (clearCurrentInputSerial)
     {
         current_input_serial = 0;
@@ -543,6 +576,10 @@ void WaylandSeat::ClearFocusFor(IWaylandWindow* window)
     if (keyboard_focus == window)
     {
         keyboard_focus = nullptr;
+    }
+    if (previous_click_target == window)
+    {
+        previous_click_target = nullptr;
     }
     if (pointer_focus == window)
     {
