@@ -1750,10 +1750,21 @@ public:
         const auto& points = element->GetPointsArray();
         if (points.Count() < 2) return;
 
+        const vint offsetX =
+            bounds.x1 + (bounds.Width() - minSize.x) / 2;
+        const vint offsetY =
+            bounds.y1 + (bounds.Height() - minSize.y) / 2;
+
         cairo_new_path(cr);
-        cairo_move_to(cr, bounds.x1 + points[0].x, bounds.y1 + points[0].y);
+        cairo_move_to(
+            cr,
+            offsetX + points[0].x + 0.5,
+            offsetY + points[0].y + 0.5);
         for (vint i = 1; i < points.Count(); i++) {
-            cairo_line_to(cr, bounds.x1 + points[i].x, bounds.y1 + points[i].y);
+            cairo_line_to(
+                cr,
+                offsetX + points[i].x + 0.5,
+                offsetY + points[i].y + 0.5);
         }
         cairo_close_path(cr);
 
@@ -1768,7 +1779,10 @@ public:
         cairo_stroke(cr);
     }
 
-    void OnElementStateChanged() override {}
+    void OnElementStateChanged() override
+    {
+        minSize = element->GetSize();
+    }
 };
 
 class GuiImageFrameElementRenderer : public GuiElementRendererBase<GuiImageFrameElement, GuiImageFrameElementRenderer, IWGacRenderTarget>
