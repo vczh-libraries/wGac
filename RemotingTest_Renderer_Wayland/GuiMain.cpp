@@ -298,6 +298,9 @@ void GuiMain()
 	GuiMainAsyncRendererInvoker invoker;
 	renderer->RegisterMainWindow(mainWindow);
 	asyncChannel->SetInvokeInMainThread(&invoker);
+#if defined VCZH_GCC && !defined VCZH_APPLE
+	currentChannelClient->WaitForServer();
+#endif
 
 	{
 #if defined VCZH_MSVC
@@ -370,7 +373,9 @@ int StartClient(Ptr<inter_process::INetworkProtocolClient> networkClient)
 	GuiRemoteProtocolRendererChannel rendererChannel(&asyncRendererChannel, &remoteRenderer);
 	channelClient.SetRenderer(&remoteRenderer);
 	channelClient.SetAsyncRendererChannel(&asyncRendererChannel);
+#if defined VCZH_MSVC || (defined VCZH_GCC && defined VCZH_APPLE)
 	channelClient.WaitForServer();
+#endif
 
 	currentChannelClient = &channelClient;
 	asyncChannel = &asyncRendererChannel;
