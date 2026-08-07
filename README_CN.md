@@ -42,6 +42,7 @@ wGac/
 ├── RemotingTest_Renderer_Wayland/     RemotingTest_Core 的原生渲染器
 ├── Apps/                              同步的资源和生成的 C++ 源码
 ├── Import/                            导入的 GacUI 合并源码
+├── Import-Test/                       仅供测试使用的 GacUI 远程辅助合并源码
 ├── import.sh                          从同级 GacUI 刷新 Import
 ├── syncProj.sh                        刷新并生成 Apps 和共享源码
 ├── syncOrg.sh                         同步同组织的同级仓库
@@ -49,7 +50,7 @@ wGac/
 └── test.sh                            启动一个测试目标
 ```
 
-运行 `./import.sh` 后，`Import/` 是只读快照；框架修复应提交到 GacUI，Wayland 兼容修复应提交到 wGac。`Apps/*/Resources/` 和 `Apps/*/Source/` 中的文件由 `./syncProj.sh` 同步或生成，不能直接修改。
+运行 `./import.sh` 后，`Import/` 和 `Import-Test/` 都是只读快照；框架修复应提交到 GacUI，Wayland 兼容修复应提交到 wGac。`Import-Test/` 保存专用的 `Test.RemotingHelpers` 文件对，以及 GacUI 生成时可选的 Windows 文件对；它们只供平台测试目标使用，不属于常规 GacUI 框架快照。`Apps/*/Resources/` 和 `Apps/*/Source/` 中的文件由 `./syncProj.sh` 同步或生成，不能直接修改。
 
 ## 同步依赖
 
@@ -65,7 +66,7 @@ wGac/
 ./import.sh
 ```
 
-该脚本使用 `../GacUI/Import/` 和 `../GacUI/Release/` 替换 `Import/`，加入 DarkSkin 的 Release 源码，并将快照设为只读。
+该脚本会重新创建 `Import/` 和 `Import-Test/`，从 `../GacUI/Import/` 和 `../GacUI/Release/` 复制常规框架文件，加入 DarkSkin 的 Release 源码，把必需的 `Test.RemotingHelpers` 文件对和可选的 Windows 文件对移动到 `Import-Test/`，并将两个快照都设为只读。
 
 刷新 Full Control Test 和 Remote Protocol Test：
 
