@@ -77,7 +77,7 @@ case "$APP_NAME" in
             echo "--hosted is only supported by --app:fct." >&2
             exit 1
         fi
-        APP="$SCRIPT_DIR/build/RemotingTest_Renderer_Wayland/bin/RemotingTest_Renderer_Wayland"
+        APP="$SCRIPT_DIR/build/RemotingTest_Rendering_Wayland/bin/RemotingTest_Rendering_Wayland"
         ;;
     *)
         usage

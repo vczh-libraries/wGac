@@ -108,7 +108,7 @@ require_file "$REMOTE_RENDERER_SOURCE"
 require_file "$RVM_GUI_MAIN_SOURCE"
 require_file "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.h"
 require_file "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.cpp"
-require_directory "$SCRIPT_DIR/RemotingTest_Renderer_Wayland"
+require_directory "$SCRIPT_DIR/RemotingTest_Rendering_Wayland"
 require_directory "$SCRIPT_DIR/WGacCppTestRvm"
 if ! command -v perl >/dev/null 2>&1; then
     echo "Perl is required to configure copied GacGen resource files." >&2
@@ -143,7 +143,7 @@ sync_application "FullControlTest" "FullControlTest"
 sync_application "RemoteProtocolTest" "RemoteProtocolTest"
 sync_application "RemoteViewModelTest" "RemoteViewModelTest"
 
-cp "$REMOTE_RENDERER_SOURCE" "$SCRIPT_DIR/RemotingTest_Renderer_Wayland/GuiMain.cpp"
+cp "$REMOTE_RENDERER_SOURCE" "$SCRIPT_DIR/RemotingTest_Rendering_Wayland/GuiMain.cpp"
 cp "$RVM_GUI_MAIN_SOURCE" "$SCRIPT_DIR/WGacCppTestRvm/GuiMain.cpp"
 cp "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.h" "$SCRIPT_DIR/Apps/RemoteViewModelTest/Source/"
 cp "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.cpp" "$SCRIPT_DIR/Apps/RemoteViewModelTest/Source/"

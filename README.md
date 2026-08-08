@@ -40,7 +40,7 @@ wGac/
 ├── WGacTest/                          Hello World test app
 ├── WGacFullControlTest/               Full Control Test, standard or hosted
 ├── WGacCppTestRvm/                    Remote View Model Test client
-├── RemotingTest_Renderer_Wayland/     Native renderer for RemotingTest_Core
+├── RemotingTest_Rendering_Wayland/    Native renderer for RemotingTest_Core
 ├── Apps/                              Synchronized resources and generated C++
 ├── Import/                            Imported GacUI amalgamated sources
 ├── Import-Test/                       Test-only GacUI remoting helper amalgamations
@@ -94,7 +94,7 @@ The root CMake project uses C++23 and builds:
 - `Test_HellWorld_Cpp`.
 - `Test_FullControlTest`.
 - `Test_CppTest_Rvm`.
-- `RemotingTest_Renderer_Wayland`.
+- `RemotingTest_Rendering_Wayland`.
 
 ## Running and Automation
 

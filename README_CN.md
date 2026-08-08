@@ -40,7 +40,7 @@ wGac/
 ├── WGacTest/                          Hello World 测试应用
 ├── WGacFullControlTest/               标准或 Hosted 模式的 Full Control Test
 ├── WGacCppTestRvm/                    Remote View Model Test 客户端
-├── RemotingTest_Renderer_Wayland/     RemotingTest_Core 的原生渲染器
+├── RemotingTest_Rendering_Wayland/    RemotingTest_Core 的原生渲染器
 ├── Apps/                              同步的资源和生成的 C++ 源码
 ├── Import/                            导入的 GacUI 合并源码
 ├── Import-Test/                       仅供测试使用的 GacUI 远程辅助合并源码
@@ -94,7 +94,7 @@ wGac/
 - `Test_HellWorld_Cpp`。
 - `Test_FullControlTest`。
 - `Test_CppTest_Rvm`。
-- `RemotingTest_Renderer_Wayland`。
+- `RemotingTest_Rendering_Wayland`。
 
 ## 运行和自动化
 
