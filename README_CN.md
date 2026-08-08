@@ -39,6 +39,7 @@ wGac/
 ├── WGacShared/                        GacUI、wGac 和共享测试库
 ├── WGacTest/                          Hello World 测试应用
 ├── WGacFullControlTest/               标准或 Hosted 模式的 Full Control Test
+├── WGacCppTestRvm/                    Remote View Model Test 客户端
 ├── RemotingTest_Renderer_Wayland/     RemotingTest_Core 的原生渲染器
 ├── Apps/                              同步的资源和生成的 C++ 源码
 ├── Import/                            导入的 GacUI 合并源码
@@ -68,13 +69,13 @@ wGac/
 
 该脚本会重新创建 `Import/` 和 `Import-Test/`，从 `../GacUI/Import/` 和 `../GacUI/Release/` 复制常规框架文件，加入 DarkSkin 的 Release 源码，把必需的 `Test.RemotingHelpers` 文件对和可选的 Windows 文件对移动到 `Import-Test/`，并将两个快照都设为只读。
 
-刷新 Full Control Test 和 Remote Protocol Test：
+刷新 Full Control Test、Remote Protocol Test 和 Remote View Model Test：
 
 ```bash
 ./syncProj.sh
 ```
 
-该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制上游资源目录，在 `Apps/` 中重新生成 x64 C++ 源码，将可移植的 MiniHTTP 自动化服务复制到 `WGacShared/`，并将可移植的原生渲染器入口复制到 `RemotingTest_Renderer_Wayland/`。
+该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制三个上游资源目录，保留资源自带的种子 C++ 文件，并在 `Apps/` 中重新生成 x64 C++ 源码。它还会刷新共享的原生渲染器入口、RVM 入口和 RVM 初始化文件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `Import-Test/`；二者都不再以本地 `WGacShared/Mini*.cpp` 副本维护。
 
 ## 编译
 
@@ -89,9 +90,10 @@ wGac/
 
 - `GacUI`：导入的 GacUI 框架。
 - `WGac`：Wayland 平台层。
-- `WGacShared`：共享的 MiniHTTP 自动化支持。
+- `WGacShared`：供测试目标共享的已导入远程测试辅助代码。
 - `Test_HellWorld_Cpp`。
 - `Test_FullControlTest`。
+- `Test_CppTest_Rvm`。
 - `RemotingTest_Renderer_Wayland`。
 
 ## 运行和自动化
@@ -102,16 +104,20 @@ wGac/
 ./test.sh --app:fct
 ./test.sh --app:fct --hosted
 ./test.sh --app:fct --hosted --unblock
+./test.sh --app:rvmt
+./test.sh --app:rvmt --unblock
 ./test.sh --app:renderer
+./test.sh --app:renderer --port:8890
 ./test.sh --app:renderer --unblock
 ```
 
-`--hosted` 只能与 `--app:fct` 一起使用。`--unblock` 会在后台启动所选程序并输出 PID。
+`--hosted` 只能与 `--app:fct` 一起使用。`--port:<1-65535>` 只能与 `--app:renderer` 一起使用，用于选择该渲染器的自动化监听端口；它不会改变连接 Core 8888 端口的 `/MiniHttp` 通道。渲染器自动化端口默认为 8889。`--unblock` 会在后台启动所选程序并输出 PID。
 
 普通应用在 8888 端口提供 MiniHTTP 自动化服务：
 
 - Hello World：`/Automation/Test_HellWorld_Cpp`
 - Full Control Test：`/Automation/Test_FullControlTest`
+- Remote View Model Test：`/Automation/CppTest_Rvm`
 
 例如：
 
@@ -126,6 +132,12 @@ curl -H 'Content-Type: application/json; charset=utf8' \
 
 验证结束后，必须停止所有后台测试进程。
 
+`--app:rvmt` 会等待对应的 Workflow RPC Host。先启动客户端，再运行：
+
+```bash
+../GacUI/Test/Linux/RemotingTest_RvmHost/Bin/RemotingTest_RvmHost /MiniHttp
+```
+
 ## 原生远程渲染器
 
 以 `/MiniHttp` 模式编译并启动 `GacUI/Test/Linux/RemotingTest_Core`，应用参数选择 `/RPT` 或 `/FCT`，然后运行：
@@ -134,11 +146,13 @@ curl -H 'Content-Type: application/json; charset=utf8' \
 ./test.sh --app:renderer
 ```
 
-Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，并在 8889 端口通过以下路径提供 DOM 和渲染端 IO：
+Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在 8889 端口通过以下路径提供 DOM 和渲染端 IO：
 
 ```text
-/Automation/RemotingTest_Renderer_Wayland
+/Automation/RemotingTest_Rendering_Native
 ```
+
+停止旧渲染器后，替换渲染器可以继续使用 8889 端口。测试实时接管时，保留 8889 上的现有渲染器，并用 `--port:8890` 启动新渲染器；随后在 8890 端口使用相同的自动化路径。
 
 完整的 RPT/FCT、替换、接管和清理流程请参阅 [GacUI 原生渲染器验证指南](../GacUI/DebugRemoteProtocolWithNativeRenderer.md)。
 

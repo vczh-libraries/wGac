@@ -17,16 +17,19 @@ Read these files before changing this repository:
 
 - This is the Wayland implementation of GacUI.
 - `Import/` is assembled from sibling `../GacUI/Import/` and `../GacUI/Release/` by `./import.sh`.
+- `Import-Test/` contains the test-only `Test.RemotingHelpers` amalgamation assembled by `./import.sh`.
 - `Apps/` is synchronized and generated from sibling GacUI resources by `./syncProj.sh`.
 - Platform code is under `WGac/`; shared test support is under `WGacShared/`.
 - Build with `./build.sh` or clean-build with `./build.sh --rebuild`.
-- Test with `./test.sh --app:simple`, `./test.sh --app:fct`, `./test.sh --app:fct --hosted`, or `./test.sh --app:renderer`.
-- The simple and Full Control Test apps expose GacUI automation through MiniHTTP on port 8888.
+- Test with `./test.sh --app:simple`, `./test.sh --app:fct`, `./test.sh --app:fct --hosted`, `./test.sh --app:rvmt`, or `./test.sh --app:renderer`.
+- The simple, Full Control Test, and Remote View Model Test apps expose GacUI automation through MiniHTTP on port 8888.
 - The native remote renderer connects to `GacUI/Test/Linux/RemotingTest_Core` through `/MiniHttp`.
+- Renderer automation uses port 8889 by default; use `--port:<port>` for a concurrent takeover renderer.
 
 ## Generated and Imported Files
 
 - Never edit `Import/` directly. Fix framework code upstream in GacUI and rerun `./import.sh`, or fix Wayland compatibility in `WGac/` and CMake.
+- Never edit `Import-Test/` directly. Fix remoting helpers upstream in GacUI and rerun `./import.sh`.
 - Never edit `Apps/*/Resources/` or `Apps/*/Source/` directly. Change the owning GacUI resource and rerun `./syncProj.sh`.
 - Generated reflection sources are retained but excluded from test targets, which compile with `VCZH_DEBUG_NO_REFLECTION`.
 - Do not edit build output under `build/`.
@@ -71,6 +74,7 @@ Review the complete generated diff before committing because both the scanner an
 
 - Exercise GUI behavior through the MiniHTTP automation service, not by assuming that a successful launch is sufficient.
 - Verify both standard and hosted Full Control Test modes.
+- Verify `--app:rvmt` with `GacUI/Test/Linux/RemotingTest_RvmHost /MiniHttp`.
 - When testing the native remote renderer, run both `/RPT` and `/FCT` workflows and verify renderer replacement, takeover, and clean shutdown.
 - For native Wayland dialogs, use the Linux guidance in `../Tools/Copilot/Guidelines/Running-ComputerUse.md`.
 - Always stop test apps, remote cores, renderers, and debugging helpers when testing is complete.

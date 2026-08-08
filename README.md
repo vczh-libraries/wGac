@@ -39,6 +39,7 @@ wGac/
 ├── WGacShared/                        GacUI, wGac, and shared test libraries
 ├── WGacTest/                          Hello World test app
 ├── WGacFullControlTest/               Full Control Test, standard or hosted
+├── WGacCppTestRvm/                    Remote View Model Test client
 ├── RemotingTest_Renderer_Wayland/     Native renderer for RemotingTest_Core
 ├── Apps/                              Synchronized resources and generated C++
 ├── Import/                            Imported GacUI amalgamated sources
@@ -68,13 +69,13 @@ Refresh the imported framework snapshot:
 
 This replaces `Import/` and `Import-Test/`, copies the ordinary framework files from `../GacUI/Import/` and `../GacUI/Release/`, adds the DarkSkin release sources, moves the required `Test.RemotingHelpers` pair and any optional Windows pair into `Import-Test/`, and marks both snapshots read-only.
 
-Refresh the Full Control Test and Remote Protocol Test projects:
+Refresh the Full Control Test, Remote Protocol Test, and Remote View Model Test projects:
 
 ```bash
 ./syncProj.sh
 ```
 
-This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies the upstream resource trees, regenerates their x64 C++ sources under `Apps/`, copies the portable MiniHTTP automation service into `WGacShared/`, and copies the portable native-renderer entry point into `RemotingTest_Renderer_Wayland/`.
+This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all three upstream resource trees, preserves resource-owned seed C++ files, and regenerates their x64 C++ sources under `Apps/`. It also refreshes the shared native-renderer and RVM entry points and the RVM initializer. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `Import-Test/`; neither is maintained as a local `WGacShared/Mini*.cpp` copy.
 
 ## Building
 
@@ -89,9 +90,10 @@ The root CMake project uses C++23 and builds:
 
 - `GacUI`, the imported GacUI framework.
 - `WGac`, the Wayland platform layer.
-- `WGacShared`, shared MiniHTTP automation support.
+- `WGacShared`, imported remoting test helpers shared by the test targets.
 - `Test_HellWorld_Cpp`.
 - `Test_FullControlTest`.
+- `Test_CppTest_Rvm`.
 - `RemotingTest_Renderer_Wayland`.
 
 ## Running and Automation
@@ -102,16 +104,20 @@ The root CMake project uses C++23 and builds:
 ./test.sh --app:fct
 ./test.sh --app:fct --hosted
 ./test.sh --app:fct --hosted --unblock
+./test.sh --app:rvmt
+./test.sh --app:rvmt --unblock
 ./test.sh --app:renderer
+./test.sh --app:renderer --port:8890
 ./test.sh --app:renderer --unblock
 ```
 
-`--hosted` is valid only with `--app:fct`. `--unblock` starts the selected executable in the background and prints its PID.
+`--hosted` is valid only with `--app:fct`. `--port:<1-65535>` is valid only with `--app:renderer` and selects that renderer's automation listener; it does not change the `/MiniHttp` connection to Core on port 8888. The default renderer automation port is 8889. `--unblock` starts the selected executable in the background and prints its PID.
 
 The normal applications expose MiniHTTP automation on port 8888:
 
 - Hello World: `/Automation/Test_HellWorld_Cpp`
 - Full Control Test: `/Automation/Test_FullControlTest`
+- Remote View Model Test: `/Automation/CppTest_Rvm`
 
 For example:
 
@@ -126,6 +132,12 @@ Use `GET .../Controls` to inspect the control tree and `POST .../IO` or `POST ..
 
 Always stop background test processes when verification is complete.
 
+`--app:rvmt` waits for the matching Workflow RPC host. Start the client first, then run:
+
+```bash
+../GacUI/Test/Linux/RemotingTest_RvmHost/Bin/RemotingTest_RvmHost /MiniHttp
+```
+
 ## Native Remote Renderer
 
 Build and start `GacUI/Test/Linux/RemotingTest_Core` in `/MiniHttp` mode for either `/RPT` or `/FCT`, then run:
@@ -134,11 +146,13 @@ Build and start `GacUI/Test/Linux/RemotingTest_Core` in `/MiniHttp` mode for eit
 ./test.sh --app:renderer
 ```
 
-The core listens on port 8888. The Wayland renderer connects through `/MiniHttp` and exposes its DOM and renderer-side IO on port 8889 at:
+The core listens on port 8888. The Wayland renderer connects through `/MiniHttp` and, by default, exposes its DOM and renderer-side IO on port 8889 at:
 
 ```text
-/Automation/RemotingTest_Renderer_Wayland
+/Automation/RemotingTest_Rendering_Native
 ```
+
+Renderer replacement can reuse port 8889 after the old renderer stops. For live takeover, keep the existing renderer on 8889 and start the new renderer with `--port:8890`, then use the same automation prefix on port 8890.
 
 Follow [GacUI's native-renderer verification guide](../GacUI/DebugRemoteProtocolWithNativeRenderer.md) for the complete RPT/FCT, replacement, takeover, and cleanup workflow.
 

@@ -1,9 +1,11 @@
 #if defined __linux__ && __has_include(<GacUI.h>) && __has_include("../WGac/Services/WGacAutomationService.h") && __has_include("../WGac/Renderers/WGacRenderer.h")
 #include <GacUI.h>
+#include <Test.RemotingHelpers.h>
 #include "../WGac/Services/WGacAutomationService.h"
 #include "../WGac/Renderers/WGacRenderer.h"
 #elif defined __APPLE__ && __has_include(<GacUI.h>)
 #include <GacUI.h>
+#include <Test.RemotingHelpers.h>
 #include "../Mac/NativeWindow/CocoaAutomationService.h"
 #include "../Mac/NativeWindow/OSX/CoreGraphics/CoreGraphicsApp.h"
 #include <dispatch/dispatch.h>
@@ -11,264 +13,39 @@
 #include "../../../Source/GacUI.h"
 #include "../../../Source/PlatformProviders/Remote/GuiRemoteProtocol.h"
 #include "../../../Source/PlatformProviders/RemoteRenderer/GuiRemoteRendererSingle.h"
+#include "../../../Source/Utilities/AutomationService/MiniHttpAutomationService.h"
+#include "../../RemotingHelpers/RendererClient/RemoteProtocolRendererClient.h"
 #endif
 #include <VlppOS.h>
 #if defined VCZH_MSVC
 #include <VlppOS.Windows.h>
-#include "../../../Source/PlatformProviders/Windows/WinNativeWindow.h"
+#include "../../../Source/Utilities/AutomationService/Windows/WindowsAutomationService.Windows.h"
 #endif
 
 using namespace vl;
 using namespace vl::presentation;
 using namespace vl::presentation::controls;
+using namespace vl::presentation::remoting;
 using namespace vl::presentation::remoteprotocol;
 using namespace vl::presentation::remoteprotocol::channeling;
 using namespace vl::presentation::remote_renderer;
 
-extern void StartMiniHttpAutomationService(Ptr<inter_process::async_tcp_socket::IAsyncSocketServer> socketServer);
-extern void StartMiniHttpAutomationService(Ptr<inter_process::async_tcp_socket::IAsyncSocketServer> socketServer, const WString& applicationName);
-extern void StopMiniHttpAutomationService();
+constexpr const wchar_t* GacUIRemoteProtocolNamedPipeName = L"GacUIRemoteProtocolNamedPipe";
+constexpr const wchar_t* GacUIRemoteProtocolHttpBaseUrl = L"/GacUIRemoteProtocolHttp";
+constexpr vint GacUIRemoteProtocolHttpPort = 8888;
+constexpr const wchar_t* GacUIAutomationApplicationName = L"RemotingTest_Rendering_Native";
 
-namespace
+struct RendererGuiContext
 {
-#if defined VCZH_MSVC
-	constexpr const wchar_t* GacUIRemoteProtocolNamedPipeName = L"GacUIRemoteProtocolNamedPipe";
-#endif
-	constexpr const wchar_t* GacUIRemoteProtocolHttpBaseUrl = L"/GacUIRemoteProtocolHttp";
-	constexpr vint GacUIRemoteProtocolHttpPort = 8888;
-	constexpr vint GacUIAutomationHttpPort = 8889;
-#if defined VCZH_MSVC
-	constexpr const wchar_t* GacUIAutomationApplicationName = L"RemotingTest_Rendering_Win32";
-#endif
-#if defined VCZH_GCC && !defined VCZH_APPLE
-	constexpr const wchar_t* GacUIAutomationApplicationName = L"RemotingTest_Renderer_Wayland";
-#endif
-#if defined VCZH_GCC && defined VCZH_APPLE
-	constexpr const wchar_t* GacUIAutomationApplicationName = L"RemotingTest_Renderer_macOS";
-#endif
-}
-
-GuiRemoteRendererSingle* renderer = nullptr;
-GuiRemoteProtocolAsyncJsonChannelRenderer* asyncChannel = nullptr;
-#if defined VCZH_MSVC
-bool useWindowsHttpAutomationService = true;
-#endif
-Ptr<inter_process::async_tcp_socket::IAsyncSocketServer>* miniHttpAutomationSocketServer = nullptr;
-
-class RemotingTestChannelClient : public GuiRemoteProtocolChannelClient
-{
-	using Base = GuiRemoteProtocolChannelClient;
-private:
-	SpinLock									lockState;
-	bool										triggeredFatalError = false;
-	bool										stopping = false;
-	WString										fatalTitle;
-	WString										fatalMessage;
-	GuiRemoteRendererSingle*					renderer = nullptr;
-	GuiRemoteProtocolAsyncJsonChannelRenderer*	asyncRendererChannel = nullptr;
-	AutomationServiceRenderer*					rendererAutomationService = nullptr;
-
-	bool ClaimFatalError(const WString& title, const WString& errorMessage)
-	{
-		bool claimed = false;
-		SPIN_LOCK(lockState)
-		{
-			if (!stopping && !triggeredFatalError && (!renderer || !renderer->IsDisconnectedFromCore()))
-			{
-				triggeredFatalError = true;
-				fatalTitle = title;
-				fatalMessage = errorMessage;
-				claimed = true;
-			}
-		}
-		return claimed;
-	}
-
-	GuiRemoteRendererSingle* GetRendererUnlessStopping()
-	{
-		GuiRemoteRendererSingle* targetRenderer = nullptr;
-		SPIN_LOCK(lockState)
-		{
-			if (!stopping)
-			{
-				targetRenderer = renderer;
-			}
-		}
-		return targetRenderer;
-	}
-
-	void QueueFatalPrompt()
-	{
-		WString title;
-		WString message;
-		GuiRemoteRendererSingle* targetRenderer = nullptr;
-		AutomationServiceRenderer* targetAutomationService = nullptr;
-		SPIN_LOCK(lockState)
-		{
-			if (stopping)
-			{
-				return;
-			}
-			title = fatalTitle;
-			message = fatalMessage;
-			targetRenderer = renderer;
-			targetAutomationService = rendererAutomationService;
-		}
-
-		auto mainWindow = GetCurrentController()->WindowService()->GetMainWindow();
-		GetCurrentController()->AsyncService()->InvokeInMainThread(
-			mainWindow,
-			[=]()
-			{
-#if defined VCZH_GCC && !defined VCZH_APPLE
-				// Raw Wayland rendering has no GuiApplication, so there is no
-				// FakeDialogService window in which to display this prompt.
-				if (targetRenderer)
-				{
-					targetRenderer->RetainByFatalError(message);
-				}
-				if (targetAutomationService)
-				{
-					targetAutomationService->SetFatalError(Nullable<WString>(message));
-				}
-#else
-				auto result = GetCurrentController()->DialogService()->ShowMessageBox(
-					mainWindow,
-					message + WString::Unmanaged(L"\r\n\r\nDo you want to close the renderer?"),
-					title,
-					INativeDialogService::DisplayYesNo,
-					INativeDialogService::DefaultFirst,
-					INativeDialogService::IconError
-				);
-				if (result == INativeDialogService::SelectYes)
-				{
-					if (targetRenderer)
-					{
-						targetRenderer->ForceExitByFatelError();
-					}
-				}
-				else
-				{
-					if (targetRenderer)
-					{
-						targetRenderer->RetainByFatalError(message);
-					}
-					if (targetAutomationService)
-					{
-						targetAutomationService->SetFatalError(Nullable<WString>(message));
-					}
-				}
-#endif
-			});
-	}
-
-public:
-	RemotingTestChannelClient(Ptr<inter_process::INetworkProtocolClient> client, Ptr<glr::json::Parser> parser)
-		: Base(client, parser)
-	{
-	}
-
-	void SetRenderer(GuiRemoteRendererSingle* _renderer)
-	{
-		SPIN_LOCK(lockState)
-		{
-			renderer = _renderer;
-		}
-	}
-
-	void SetAsyncRendererChannel(GuiRemoteProtocolAsyncJsonChannelRenderer* _asyncRendererChannel)
-	{
-		SPIN_LOCK(lockState)
-		{
-			asyncRendererChannel = _asyncRendererChannel;
-		}
-	}
-
-	void SetRendererAutomationService(AutomationServiceRenderer* _rendererAutomationService)
-	{
-		SPIN_LOCK(lockState)
-		{
-			rendererAutomationService = _rendererAutomationService;
-		}
-	}
-
-	void BeginStopping()
-	{
-		SPIN_LOCK(lockState)
-		{
-			stopping = true;
-		}
-	}
-
-	void OnReadError(const WString& errorMessage) override
-	{
-		if (ClaimFatalError(L"ERROR from GacUI Core", errorMessage))
-		{
-			QueueFatalPrompt();
-		}
-	}
-
-	void OnLocalError(const WString& errorMessage, bool fatal) override
-	{
-		if (fatal)
-		{
-			if (ClaimFatalError(L"ERROR from Renderer Transport", errorMessage))
-			{
-				if (auto targetRenderer = GetRendererUnlessStopping())
-				{
-					targetRenderer->RequestCoreForceExitByFatalError();
-				}
-				QueueFatalPrompt();
-			}
-		}
-	}
-
-	void OnDisconnected() override
-	{
-		Base::OnDisconnected();
-
-		GuiRemoteProtocolAsyncJsonChannelRenderer* targetAsyncRendererChannel = nullptr;
-		GuiRemoteRendererSingle* targetRenderer = nullptr;
-		SPIN_LOCK(lockState)
-		{
-			targetAsyncRendererChannel = asyncRendererChannel;
-			if (!stopping && !triggeredFatalError)
-			{
-				targetRenderer = renderer;
-			}
-		}
-		if (targetAsyncRendererChannel)
-		{
-			targetAsyncRendererChannel->Detach();
-		}
-		if (targetRenderer)
-		{
-#if defined VCZH_MSVC
-			targetRenderer->ForceExitByFatelError();
-#endif
-#if defined VCZH_GCC && !defined VCZH_APPLE
-			auto mainWindow = GetCurrentController()->WindowService()->GetMainWindow();
-			GetCurrentController()->AsyncService()->InvokeInMainThread(
-				mainWindow,
-				[targetRenderer]()
-				{
-					targetRenderer->ForceExitByFatelError();
-				});
-#endif
-#if defined VCZH_GCC && defined VCZH_APPLE
-			dispatch_async_f(
-				dispatch_get_main_queue(),
-				targetRenderer,
-				[](void* context)
-				{
-					static_cast<GuiRemoteRendererSingle*>(context)->ForceExitByFatelError();
-				});
-#endif
-		}
-	}
+	RemoteProtocolRendererClient*						channelClient = nullptr;
+	GuiRemoteProtocolAsyncJsonChannelRenderer*			asyncChannel = nullptr;
+	GuiRemoteRendererSingle*							renderer = nullptr;
+	Ptr<inter_process::async_tcp_socket::IAsyncSocketServer>
+											miniHttpSocketServer;
+	vint												automationHttpPort = 0;
 };
 
-RemotingTestChannelClient* currentChannelClient = nullptr;
+RendererGuiContext* currentGuiContext = nullptr;
 
 class GuiMainAsyncRendererInvoker : public Object, public virtual IGuiRemoteProtocolAsyncRendererInvoker
 {
@@ -277,11 +54,9 @@ public:
 	{
 #if defined VCZH_MSVC
 		GetApplication()->InvokeInMainThread(nullptr, proc);
-#endif
-#if defined VCZH_GCC && !defined VCZH_APPLE
+#elif defined VCZH_GCC && !defined VCZH_APPLE
 		GetCurrentController()->AsyncService()->InvokeInMainThread(nullptr, proc);
-#endif
-#if defined VCZH_GCC && defined VCZH_APPLE
+#else
 		auto queuedProc = new Func<void()>(proc);
 		dispatch_async_f(
 			dispatch_get_main_queue(),
@@ -298,6 +73,7 @@ public:
 
 void GuiMain()
 {
+	CHECK_ERROR(currentGuiContext, L"GuiMain()#The renderer GUI context is null.");
 	auto mainWindow = GetCurrentController()->WindowService()->CreateNativeWindow(INativeWindow::Normal);
 	mainWindow->SetTitle(L"Connecting ...");
 	{
@@ -308,81 +84,86 @@ void GuiMain()
 		auto y = client.Top() + (client.Height() - size.y) / 2;
 		mainWindow->SetBounds({ {x,y},size });
 	}
-	GuiMainAsyncRendererInvoker invoker;
-	renderer->RegisterMainWindow(mainWindow);
-	asyncChannel->SetInvokeInMainThread(&invoker);
-#if defined VCZH_GCC && !defined VCZH_APPLE
-	currentChannelClient->WaitForServer();
-#endif
+	auto invoker = Ptr(new GuiMainAsyncRendererInvoker);
+	currentGuiContext->renderer->RegisterMainWindow(mainWindow);
 
-	{
 #if defined VCZH_MSVC
-		windows::WindowsAutomationServiceRenderer automationService(renderer);
-#endif
-#if defined VCZH_GCC && !defined VCZH_APPLE
-		wayland::WGacAutomationServiceRenderer automationService(renderer);
-#endif
-#if defined VCZH_GCC && defined VCZH_APPLE
-		osx::CocoaAutomationServiceRenderer automationService(renderer);
-#endif
-		currentChannelClient->SetRendererAutomationService(&automationService);
-		GetNativeServiceSubstitution()->Substitute(&automationService, false);
-		auto cleanup = [&]()
-		{
-#if defined VCZH_MSVC
-			if (!useWindowsHttpAutomationService)
-			{
-				StopMiniHttpAutomationService();
-			}
+	windows::WindowsAutomationServiceRenderer rendererAutomationServiceObject(currentGuiContext->renderer);
+#elif defined VCZH_GCC && !defined VCZH_APPLE
+	wayland::WGacAutomationServiceRenderer rendererAutomationServiceObject(currentGuiContext->renderer);
 #else
-			StopMiniHttpAutomationService();
+	osx::CocoaAutomationServiceRenderer rendererAutomationServiceObject(currentGuiContext->renderer);
 #endif
-			GetCurrentController()->AutomationService()->Stop();
+	GetNativeServiceSubstitution()->Substitute(&rendererAutomationServiceObject, false);
 #if defined VCZH_MSVC
-			if (useWindowsHttpAutomationService)
-			{
-				windows::StopWindowsHttpAutomationService();
-			}
+	if (currentGuiContext->miniHttpSocketServer)
+	{
+		StartMiniHttpAutomationService(
+			currentGuiContext->miniHttpSocketServer,
+			WString::Unmanaged(GacUIAutomationApplicationName)
+			);
+	}
+	else
+	{
+		windows::StartWindowsHttpAutomationService(
+			WString::Unmanaged(L"Automation/") + WString::Unmanaged(GacUIAutomationApplicationName),
+			currentGuiContext->automationHttpPort
+			);
+	}
+#else
+	StartMiniHttpAutomationService(
+		currentGuiContext->miniHttpSocketServer,
+		WString::Unmanaged(GacUIAutomationApplicationName)
+		);
 #endif
-			GetNativeServiceSubstitution()->Unsubstitute(&automationService);
-			currentChannelClient->SetRendererAutomationService(nullptr);
-		};
-		try
-		{
-#if defined VCZH_MSVC
-			if (useWindowsHttpAutomationService)
-			{
-				windows::StartWindowsHttpAutomationService(WString::Unmanaged(L"Automation/RemotingTest_Rendering_Win32"), GacUIAutomationHttpPort);
-			}
-			else
+	currentGuiContext->channelClient->SetRendererAutomationService(&rendererAutomationServiceObject);
+
+#if defined VCZH_GCC && !defined VCZH_APPLE
+	currentGuiContext->channelClient->WaitForServer();
 #endif
-			{
-				StartMiniHttpAutomationService(
-					*miniHttpAutomationSocketServer,
-					WString::Unmanaged(GacUIAutomationApplicationName)
-					);
-			}
-			GetCurrentController()->WindowService()->Run(mainWindow);
-		}
-		catch (...)
-		{
-			cleanup();
-			throw;
-		}
-		cleanup();
+	currentGuiContext->asyncChannel->SetInvokeInMainThread(invoker);
+	currentGuiContext->asyncChannel->ProcessPendingMessages();
+	if (
+		!currentGuiContext->renderer->IsDisconnectedFromCore() ||
+		currentGuiContext->channelClient->IsFatalErrorRetained()
+		)
+	{
+		GetCurrentController()->WindowService()->Run(mainWindow);
 	}
 
-	currentChannelClient->BeginStopping();
-	asyncChannel->SetInvokeInMainThread(nullptr);
-	renderer->UnregisterMainWindow();
+#if defined VCZH_MSVC
+	if (currentGuiContext->miniHttpSocketServer)
+	{
+		StopMiniHttpAutomationService();
+	}
+	else
+	{
+		windows::StopWindowsHttpAutomationService();
+	}
+#else
+	StopMiniHttpAutomationService();
+#endif
+	currentGuiContext->channelClient->SetRendererAutomationService(nullptr);
+	rendererAutomationServiceObject.Stop();
+	GetNativeServiceSubstitution()->Unsubstitute(&rendererAutomationServiceObject);
+	currentGuiContext->asyncChannel->SetInvokeInMainThread(nullptr);
+	currentGuiContext->renderer->UnregisterMainWindow();
 }
 
-int StartClient(Ptr<inter_process::INetworkProtocolClient> networkClient)
+int StartClient(
+	Ptr<inter_process::INetworkProtocolClient> networkClient,
+	Ptr<inter_process::async_tcp_socket::IAsyncSocketServer> miniHttpSocketServer,
+	vint automationHttpPort
+	)
 {
 	auto jsonParser = Ptr(new glr::json::Parser);
-	RemotingTestChannelClient channelClient(networkClient, jsonParser);
+	RemoteProtocolRendererClient channelClient(
+		networkClient,
+		jsonParser,
+		WString::Unmanaged(L"ERROR from GacUI Core")
+		);
 	GuiRemoteProtocolAsyncJsonChannelRenderer asyncRendererChannel(channelClient.GetProtocolChannel());
-	GuiRemoteRendererSingle remoteRenderer(true); // true to enable automation data collection
+	GuiRemoteRendererSingle remoteRenderer(true);
 	GuiRemoteProtocolRendererChannel rendererChannel(&asyncRendererChannel, &remoteRenderer);
 	channelClient.SetRenderer(&remoteRenderer);
 	channelClient.SetAsyncRendererChannel(&asyncRendererChannel);
@@ -390,98 +171,59 @@ int StartClient(Ptr<inter_process::INetworkProtocolClient> networkClient)
 	channelClient.WaitForServer();
 #endif
 
-	currentChannelClient = &channelClient;
-	asyncChannel = &asyncRendererChannel;
-	renderer = &remoteRenderer;
-	auto stopClient = [&]()
-	{
-		// Stop() is the transport barrier. Suppress controller callbacks first,
-		// but keep callback targets alive until all network callbacks have ended.
-		channelClient.BeginStopping();
-		try
-		{
-			networkClient->GetConnection()->Stop();
-		}
-		catch (...)
-		{
-			channelClient.SetAsyncRendererChannel(nullptr);
-			channelClient.SetRenderer(nullptr);
-			currentChannelClient = nullptr;
-			renderer = nullptr;
-			asyncChannel = nullptr;
-			throw;
-		}
-		channelClient.SetAsyncRendererChannel(nullptr);
-		channelClient.SetRenderer(nullptr);
-		currentChannelClient = nullptr;
-		renderer = nullptr;
-		asyncChannel = nullptr;
-	};
-
-	int result = 0;
-	try
-	{
+	RendererGuiContext context{ &channelClient, &asyncRendererChannel, &remoteRenderer, miniHttpSocketServer, automationHttpPort };
+	CHECK_ERROR(!currentGuiContext, L"StartClient(...)#The GUI context has already been bound.");
+	currentGuiContext = &context;
 #if defined VCZH_MSVC
-		result = SetupRawWindowsDirect2DRenderer();
+	auto result = SetupRawWindowsDirect2DRenderer();
+#elif defined VCZH_GCC && !defined VCZH_APPLE
+	auto result = elements::wgac::SetupRawWGacRenderer();
+#else
+	auto result = SetupRawOSXCoreGraphicsRenderer();
 #endif
-#if defined VCZH_GCC && !defined VCZH_APPLE
-		result = elements::wgac::SetupRawWGacRenderer();
-#endif
-#if defined VCZH_GCC && defined VCZH_APPLE
-		result = SetupRawOSXCoreGraphicsRenderer();
-#endif
-	}
-	catch (...)
-	{
-		try
-		{
-			stopClient();
-		}
-		catch (...)
-		{
-		}
-		throw;
-	}
-	stopClient();
+	currentGuiContext = nullptr;
 
+	channelClient.BeginStopping();
+	networkClient->GetConnection()->Stop();
+	channelClient.SetAsyncRendererChannel(nullptr);
+	channelClient.SetRenderer(nullptr);
 	return result;
 }
 
 #if defined VCZH_MSVC
-int StartNamedPipeClient()
+int StartNamedPipeClient(vint automationHttpPort)
 {
-	useWindowsHttpAutomationService = true;
-	return StartClient(Ptr(new inter_process::named_pipe::NamedPipeClient(WString::Unmanaged(GacUIRemoteProtocolNamedPipeName))));
+	return StartClient(
+		Ptr(new inter_process::named_pipe::NamedPipeClient(WString::Unmanaged(GacUIRemoteProtocolNamedPipeName))),
+		nullptr,
+		automationHttpPort
+		);
 }
 
-int StartHttpClient()
+int StartHttpClient(vint automationHttpPort)
 {
-	useWindowsHttpAutomationService = true;
-	return StartClient(Ptr(new inter_process::windows_http::HttpClient(WString::Unmanaged(GacUIRemoteProtocolHttpBaseUrl), GacUIRemoteProtocolHttpPort)));
+	return StartClient(
+		Ptr(new inter_process::windows_http::HttpClient(
+			WString::Unmanaged(GacUIRemoteProtocolHttpBaseUrl),
+			GacUIRemoteProtocolHttpPort
+			)),
+		nullptr,
+		automationHttpPort
+		);
 }
 #endif
 
-int StartMiniHttpClient()
+int StartMiniHttpClient(vint automationHttpPort)
 {
-#if defined VCZH_MSVC
-	useWindowsHttpAutomationService = false;
-#endif
-	auto socketServer = inter_process::async_tcp_socket::CreateDefaultAsyncSocketServer(GacUIAutomationHttpPort);
+	auto socketServer = inter_process::async_tcp_socket::CreateDefaultAsyncSocketServer(automationHttpPort);
 	auto socketClient = inter_process::async_tcp_socket::CreateDefaultAsyncSocketClient(GacUIRemoteProtocolHttpPort);
-	miniHttpAutomationSocketServer = &socketServer;
-	try
-	{
-		auto result = StartClient(Ptr(new inter_process::async_tcp_socket::SocketHttpClient(
+	return StartClient(
+		Ptr(new inter_process::async_tcp_socket::SocketHttpClient(
 			socketClient,
 			WString::Unmanaged(L"localhost"),
 			WString::Unmanaged(GacUIRemoteProtocolHttpBaseUrl)
-			)));
-		miniHttpAutomationSocketServer = nullptr;
-		return result;
-	}
-	catch (...)
-	{
-		miniHttpAutomationSocketServer = nullptr;
-		throw;
-	}
+		)),
+		socketServer,
+		automationHttpPort
+		);
 }

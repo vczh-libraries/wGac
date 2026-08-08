@@ -51,7 +51,7 @@ set(WGAC_FILES
 )
 
 set(WGAC_SHARED_FILES
-    "MiniHttpAutomationService.cpp"
+    "../Import-Test/Test.RemotingHelpers.cpp"
 )
 
 add_library(GacUI STATIC ${GACUI_COMMON_FILES})
@@ -89,6 +89,7 @@ add_library(WGacShared STATIC ${WGAC_SHARED_FILES})
 target_include_directories(WGacShared PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../Import"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Import-Test"
     "${CMAKE_CURRENT_SOURCE_DIR}/../WGac"
 )
 target_link_libraries(WGacShared PUBLIC GacUI)
