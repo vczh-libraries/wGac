@@ -1,6 +1,7 @@
 #include "gac_include.h"
 #include "FullControlTest.h"
 #include "../WGac/Renderers/WGacRenderer.h"
+#include "../WGac/Services/WGacAutomationService.h"
 
 #include <cstring>
 #include <VlppOS.h>
@@ -33,16 +34,20 @@ void GuiMain()
     window.ForceCalculateSizeImmediately();
     window.MoveToScreenCenter();
 
+    Ptr<INativeAutomationService> automationService;
+    if (GetHostedApplication())
+    {
+        automationService = Ptr(new wayland::WGacAutomationServiceHosted);
+    }
+    else
+    {
+        automationService = Ptr(new wayland::WGacAutomationService);
+    }
+    GetNativeServiceSubstitution()->Substitute(automationService.Obj(), false);
     auto socketServer = inter_process::async_tcp_socket::CreateDefaultAsyncSocketServer(8888);
     StartMiniHttpAutomationService(socketServer, WString::Unmanaged(L"Test_FullControlTest"));
-    try
-    {
-        GetApplication()->Run(&window);
-    }
-    catch (...)
-    {
-        StopMiniHttpAutomationService();
-        throw;
-    }
+    GetApplication()->Run(&window);
     StopMiniHttpAutomationService();
+    automationService->Stop();
+    GetNativeServiceSubstitution()->Unsubstitute(automationService.Obj());
 }

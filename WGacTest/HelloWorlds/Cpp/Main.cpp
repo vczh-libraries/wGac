@@ -1,5 +1,6 @@
 #include "gac_include.h"
 #include "Renderers/WGacRenderer.h"
+#include "Services/WGacAutomationService.h"
 
 #include <VlppOS.h>
 
@@ -31,16 +32,12 @@ void GuiMain()
     }
     window.AddChild(label);
 
+    wayland::WGacAutomationService automationService;
+    GetNativeServiceSubstitution()->Substitute(&automationService, false);
     auto socketServer = inter_process::async_tcp_socket::CreateDefaultAsyncSocketServer(8888);
     StartMiniHttpAutomationService(socketServer, WString::Unmanaged(L"Test_HellWorld_Cpp"));
-    try
-    {
-        GetApplication()->Run(&window);
-    }
-    catch (...)
-    {
-        StopMiniHttpAutomationService();
-        throw;
-    }
+    GetApplication()->Run(&window);
     StopMiniHttpAutomationService();
+    automationService.Stop();
+    GetNativeServiceSubstitution()->Unsubstitute(&automationService);
 }

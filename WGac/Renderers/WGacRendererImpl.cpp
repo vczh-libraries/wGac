@@ -3,7 +3,6 @@
 #include "../WGacNativeWindow.h"
 #include "../WGacGacView.h"
 #include "../Wayland/WaylandDisplay.h"
-#include "../Services/WGacAutomationService.h"
 #include "../Services/WGacImageService.h"
 #include <functional>
 
@@ -1969,23 +1968,9 @@ int SetupWGacRendererInternal(bool hosted, bool raw)
         SetNativeController(nativeController);
     }
 
-    Ptr<INativeAutomationService> automationService;
-    if (hosted)
-    {
-        automationService = Ptr(new wayland::WGacAutomationServiceHosted);
-    }
-    else
-    {
-        automationService = Ptr(new wayland::WGacAutomationService);
-    }
-    GetNativeServiceSubstitution()->Substitute(automationService.Obj(), false);
-
     {
         WGacMain(nativeController, hostedController, raw);
     }
-
-    GetNativeServiceSubstitution()->Unsubstitute(automationService.Obj());
-    automationService = nullptr;
 
     SetNativeController(nullptr);
     if (hostedController)
