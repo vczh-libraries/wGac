@@ -46,7 +46,7 @@ wGac/
 ├── Import-Test/                       Test-only GacUI remoting helper amalgamations
 ├── import.sh                          Refresh Import from sibling GacUI
 ├── syncProj.sh                        Refresh and generate Apps and shared sources
-├── syncOrg.sh                         Synchronize sibling organization repositories
+├── syncOrg.sh                         Synchronize organization repositories, including wGac
 ├── build.sh                           Build all test targets
 └── test.sh                            Launch one test target
 ```
@@ -55,7 +55,7 @@ wGac/
 
 ## Synchronizing Dependencies
 
-Synchronize the sibling organization repositories:
+Synchronize the organization repositories, including this wGac checkout:
 
 ```bash
 ./syncOrg.sh

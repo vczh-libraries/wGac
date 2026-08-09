@@ -46,7 +46,7 @@ wGac/
 ├── Import-Test/                       仅供测试使用的 GacUI 远程辅助合并源码
 ├── import.sh                          从同级 GacUI 刷新 Import
 ├── syncProj.sh                        刷新并生成 Apps 和共享源码
-├── syncOrg.sh                         同步同组织的同级仓库
+├── syncOrg.sh                         同步组织仓库（包括 wGac）
 ├── build.sh                           编译所有测试目标
 └── test.sh                            启动一个测试目标
 ```
@@ -55,7 +55,7 @@ wGac/
 
 ## 同步依赖
 
-同步同组织的同级仓库：
+同步组织仓库，包括当前 wGac 检出：
 
 ```bash
 ./syncOrg.sh
