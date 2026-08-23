@@ -48,7 +48,8 @@ wGac/
 ├── syncProj.sh                        刷新并生成 Apps 和共享源码
 ├── syncOrg.sh                         同步组织仓库（包括 wGac）
 ├── build.sh                           编译所有测试目标
-└── test.sh                            启动一个测试目标
+├── test.sh                            启动一个原生测试目标
+└── test_core.sh                       全量编译并启动同级 GacUI 的 Core 侧目标
 ```
 
 运行 `./import.sh` 后，`Import/` 和 `Import-Test/` 都是只读快照；框架修复应提交到 GacUI，Wayland 兼容修复应提交到 wGac。`Import-Test/` 保存专用的中立 `Test.RemotingHelpers` 文件对、必需的 Linux 实现，以及 GacUI 生成时可选的 Windows 实现；它们只供平台测试目标使用，不属于常规 GacUI 框架快照。`Apps/*/Resources/` 和 `Apps/*/Source/` 中的文件由 `./syncProj.sh` 同步或生成，不能直接修改。
@@ -109,9 +110,21 @@ wGac/
 ./test.sh --app:renderer
 ./test.sh --app:renderer --port:8890
 ./test.sh --app:renderer --unblock
+./test_core.sh --app:cpptest_rvm --protocol:minihttp --unblock
+./test_core.sh --app:fct --protocol:minihttp
+./test_core.sh --app:rpt --protocol:minihttp
+./test_core.sh --app:rvmt --protocol:minihttp [--cli]
 ```
 
 `--hosted` 只能与 `--app:fct` 一起使用。`--port:<1-65535>` 只能与 `--app:renderer` 一起使用，用于选择该渲染器的自动化监听端口；它不会改变连接 Core 8888 端口的 `/MiniHttp` 通道。渲染器自动化端口默认为 8889。`--unblock` 会在后台启动所选程序并输出 PID。
+
+`test_core.sh` 沿用相同的 `--app:` 和 `--unblock` 参数命名，并要求指定
+`--protocol:minihttp`（可移植平台唯一支持的传输）。它会在启动每个用到的
+GacUI 项目前，使用 `-f` 调用 GacUI 的 `Test/Linux` 编译脚本。手动模式的
+`cpptest_rvm` 和 `rvmt` 会先启动 requester/Core，等待一秒，再全量编译并
+启动 `RemotingTest_RvmHost`；后台手动模式会输出两个 PID。`--cli` 仅支持
+`--app:rvmt`，它会预先编译 host，并由 Core 通过 stdio 自动启动。
+可移植的 `Test_CppTest_Rvm` 仍只支持手动 `/MiniHttp`。
 
 普通应用在 8888 端口提供 MiniHTTP 自动化服务：
 
@@ -141,6 +154,9 @@ curl -H 'Content-Type: application/json; charset=utf8' \
 ## 原生远程渲染器
 
 以 `/MiniHttp` 模式编译并启动 `GacUI/Test/Linux/RemotingTest_Core`，应用参数选择 `/RPT` 或 `/FCT`，然后运行：
+
+`./test_core.sh --app:rpt --protocol:minihttp` 会全量编译并启动 `/RPT`
+形式（`/FCT` 请改用 `fct`）。现有 `test.sh` 继续用于启动原生渲染器：
 
 ```bash
 ./test.sh --app:renderer

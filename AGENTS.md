@@ -21,7 +21,7 @@ Read these files before changing this repository:
 - `Apps/` is synchronized and generated from sibling GacUI resources by `./syncProj.sh`.
 - Platform code is under `WGac/`; shared test support is under `WGacShared/`.
 - Build with `./build.sh` or clean-build with `./build.sh --rebuild`.
-- Test with `./test.sh --app:simple`, `./test.sh --app:fct`, `./test.sh --app:fct --hosted`, `./test.sh --app:rvmt`, or `./test.sh --app:renderer`.
+- Test native apps with `./test.sh --app:simple`, `./test.sh --app:fct`, `./test.sh --app:fct --hosted`, `./test.sh --app:rvmt`, or `./test.sh --app:renderer`; use `./test_core.sh --app:fct|rpt|rvmt --protocol:minihttp` for the sibling GacUI Core-side launcher.
 - The simple, Full Control Test, and Remote View Model Test apps expose GacUI automation through MiniHTTP on port 8888.
 - The native remote renderer connects to `GacUI/Test/Linux/RemotingTest_Core` through `/MiniHttp`.
 - Renderer automation uses port 8889 by default; use `--port:<port>` for a concurrent takeover renderer.
