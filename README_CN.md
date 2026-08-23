@@ -170,7 +170,7 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 
 停止旧渲染器后，替换渲染器可以继续使用 8889 端口。测试实时接管时，保留 8889 上的现有渲染器，并用 `--port:8890` 启动新渲染器；随后在 8890 端口使用相同的自动化路径。
 
-完整的 RPT/FCT、替换、接管和清理流程请参阅 [GacUI 原生渲染器验证指南](../GacUI/DebugRemoteProtocolWithNativeRenderer.md)。
+完整的 RPT/FCT、替换、接管和清理流程请参阅 [GacUI 原生渲染器验证指南](../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md)。
 
 ## 已知限制
 

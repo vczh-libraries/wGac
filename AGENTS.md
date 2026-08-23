@@ -9,7 +9,7 @@ Read these files before changing this repository:
    - `KB_GacUI_Design_PlatformInitialization.md` for entry points, renderer setup, and service registration.
    - `KB_GacUI_Design_MainWindowModalWindow.md` for modal windows and hosted mode.
    - `KB_GacUI_Manual_AutomationService.md` for automation services and IO commands.
-3. [../GacUI/DebugRemoteProtocolWithNativeRenderer.md](../GacUI/DebugRemoteProtocolWithNativeRenderer.md) before testing the native remote renderer.
+3. [../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md](../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md) before testing the native remote renderer.
 
 `Import/GacUI.h` defines the platform abstraction interfaces. When Wayland behavior is unclear, compare the current Windows implementation in `Import/GacUI.Windows.cpp` and the Cocoa implementation in sibling `../iGac`.
 
@@ -86,7 +86,7 @@ Update `README.md` and its Chinese translation `README_CN.md` when files, target
 
 Linux-specific remote-renderer workflow changes belong in:
 
-- `../GacUI/DebugRemoteProtocolWithNativeRenderer.md`
+- `../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md`
 - `../Tools/Jobs/job.verifyRemoteProtocol.prompt.md`
 
 Linux computer-use guidance belongs in:

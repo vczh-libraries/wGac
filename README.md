@@ -172,7 +172,7 @@ The core listens on port 8888. The Wayland renderer connects through `/MiniHttp`
 
 Renderer replacement can reuse port 8889 after the old renderer stops. For live takeover, keep the existing renderer on 8889 and start the new renderer with `--port:8890`, then use the same automation prefix on port 8890.
 
-Follow [GacUI's native-renderer verification guide](../GacUI/DebugRemoteProtocolWithNativeRenderer.md) for the complete RPT/FCT, replacement, takeover, and cleanup workflow.
+Follow [GacUI's native-renderer verification guide](../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md) for the complete RPT/FCT, replacement, takeover, and cleanup workflow.
 
 ## Known Limitations
 
