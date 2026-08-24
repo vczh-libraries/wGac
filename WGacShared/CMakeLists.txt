@@ -52,7 +52,6 @@ set(WGAC_FILES
 
 set(WGAC_SHARED_FILES
     "../Import-Test/Test.RemotingHelpers.cpp"
-    "../Import-Test/Test.RemotingHelpers.Linux.cpp"
 )
 
 add_library(GacUI STATIC ${GACUI_COMMON_FILES})
