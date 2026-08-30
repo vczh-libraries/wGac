@@ -21,6 +21,7 @@ Read these files before changing this repository:
 - `Apps/` is synchronized and generated from sibling GacUI resources by `./syncProj.sh`.
 - Platform code is under `WGac/`; shared test support is under `WGacShared/`.
 - On Ubuntu, run `sudo ./build-prerequisites-ubuntu.sh` to install the system build dependencies. The prerequisite script requires root but never invokes `sudo` itself, and `./build.sh` never downloads or installs dependencies.
+- If `./build.sh` fails because Ubuntu packages are missing, do not add dependency-download logic to `build.sh`. Ask the user to run `sudo ./build-prerequisites-ubuntu.sh`; if system installation is unavailable, use a disposable container or a temporary uncommitted sysroot outside the repository.
 - Build with `./build.sh` or clean-build with `./build.sh --rebuild`.
 - Test native apps with `./test.sh --app:simple`, `./test.sh --app:fct`, `./test.sh --app:fct --hosted`, `./test.sh --app:rvmt`, or `./test.sh --app:renderer`; use `./test_core.sh --app:fct|rpt|rvmt --protocol:minihttp` for the sibling GacUI Core-side launcher.
 - The simple, Full Control Test, and Remote View Model Test apps expose GacUI automation through MiniHTTP on port 8888.
