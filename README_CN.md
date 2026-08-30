@@ -8,18 +8,20 @@ wGac 使用 Wayland、Cairo、Pango 和 XKBCommon，为 Linux Wayland 实现 Gac
 
 ## 环境依赖
 
-仓库中已提交 `Import/` 和 `Apps/` 快照，因此常规编译不需要其他源码仓库。在 Debian 或 Ubuntu 上安装：
+仓库中已提交 `Import/` 和 `Apps/` 快照，因此常规编译不依赖同级源码仓库。建议将编译依赖安装到系统中。在 Debian 或 Ubuntu 上安装：
 
 ```bash
 sudo apt update
 sudo apt install build-essential clang cmake pkg-config \
     libwayland-dev libxkbcommon-dev \
     libdecor-0-dev libdecor-0-plugin-1-gtk \
-    libcairo2-dev libpango1.0-dev libfontconfig1-dev \
+    libcairo2-dev libpango1.0-dev libfontconfig-dev \
     libgdk-pixbuf-2.0-dev libglib2.0-dev liburing-dev
 ```
 
 保留的 `WGacDialogService` 实现依赖 GIO，但当前 Wayland 应用会选择 `FakeDialogService`，无需安装桌面 Portal 后端。
+
+如果缺少 `pkg-config` 或所需的开发模块，Debian 或 Ubuntu 上的 `./build.sh` 会下载所需软件包但不安装，并将仅供本次检出使用的依赖解压到 `build/dependencies/`。该后备方式需要可用的 apt 元数据和网络连接，但无需 `sudo`；全新克隆或执行 `--rebuild` 后会自动重新创建。编译器、CMake、Make、`apt-get`、`dpkg-deb` 和 `ldconfig` 仍需可用。已安装系统依赖的机器会正常编译，不会下载这套后备依赖。
 
 请在 Wayland 桌面会话中运行应用，并确保 `WAYLAND_DISPLAY` 和 `XDG_RUNTIME_DIR` 可用。
 
@@ -86,6 +88,8 @@ wGac/
 ```
 
 第一个命令执行增量编译。`--rebuild` 会用 `git clean -xdf` 删除被忽略的编译输出并执行全量编译，因此使用前请先提交或暂存所有新增源码。
+
+每次编译都会显式选择可用的 `pkg-config`。CMake 会同时跟踪该可执行文件及其软件包搜索路径，因此增量编译不会继续保留已删除 sysroot 或其他机器上的库路径。
 
 根 CMake 项目使用 C++23，并编译：
 

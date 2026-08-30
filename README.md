@@ -8,18 +8,20 @@ wGac implements the native GacUI platform layer for Linux Wayland using Wayland,
 
 ## Prerequisites
 
-The committed `Import/` and `Apps/` snapshots make a normal build self-contained. On Debian or Ubuntu, install:
+The committed `Import/` and `Apps/` snapshots make a normal build independent of sibling source repositories. A system installation of the build dependencies is preferred. On Debian or Ubuntu, install:
 
 ```bash
 sudo apt update
 sudo apt install build-essential clang cmake pkg-config \
     libwayland-dev libxkbcommon-dev \
     libdecor-0-dev libdecor-0-plugin-1-gtk \
-    libcairo2-dev libpango1.0-dev libfontconfig1-dev \
+    libcairo2-dev libpango1.0-dev libfontconfig-dev \
     libgdk-pixbuf-2.0-dev libglib2.0-dev liburing-dev
 ```
 
 The retained `WGacDialogService` implementation uses GIO, but current Wayland applications select `FakeDialogService` and do not require a desktop portal backend.
+
+If `pkg-config` or the required development modules are missing, `./build.sh` on Debian or Ubuntu downloads the required packages without installing them and extracts a build-local dependency set under `build/dependencies/`. This fallback requires working apt metadata and network access, but does not require `sudo` and is recreated automatically after a clean clone or `--rebuild`. The compiler, CMake, Make, `apt-get`, `dpkg-deb`, and `ldconfig` must still be available. Machines with the system packages installed build normally without downloading this fallback.
 
 Run applications from a Wayland desktop session with `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` available.
 
@@ -86,6 +88,8 @@ This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all
 ```
 
 The first command is incremental. `--rebuild` removes ignored build output with `git clean -xdf` and performs a clean build, so commit or stage any new source files before using it.
+
+Each build selects a working `pkg-config` explicitly. CMake tracks that executable together with its package search paths, so an incremental build does not retain library paths from a deleted sysroot or another machine.
 
 The root CMake project uses C++23 and builds:
 
