@@ -185,3 +185,8 @@ Follow [GacUI's native-renderer verification guide](../GacUI/.github/Jobs/DebugR
 - Wayland does not allow clients to position normal top-level windows globally; placement requests are compositor-dependent.
 - libdecor has no platform-frame window-icon API, so `IconVisible` is unsupported and always reports `false`.
 - libdecor cannot independently hide the maximize control. Its maximize affordance follows `SizeBox` (the frame's resize capability); `MaximizedBox` retains its requested value but cannot override that platform limitation.
+
+## Bugs
+
+- Global shortcut key is not implemented, in `test.sh --app:fct` pressing `CTRL+SHIFT+ALT+SUPER+Q` does not work.
+- Wayland native renderer has an issue of dragging main window title, the window always align its left-top corner to the cursor, which is not consistent with Wayland native app.

@@ -183,3 +183,8 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 - Wayland 不允许客户端全局定位普通顶层窗口；位置请求由合成器决定。
 - libdecor 没有设置平台边框窗口图标的 API，因此不支持 `IconVisible`，其 getter 始终返回 `false`。
 - libdecor 无法单独隐藏最大化控件。最大化操作入口由 `SizeBox`（边框的缩放能力）决定；`MaximizedBox` 会保留并返回请求值，但无法突破这一平台限制。
+
+## 缺陷
+
+- 全局快捷键尚未实现。在运行 `test.sh --app:fct` 时，按 `CTRL+SHIFT+ALT+SUPER+Q` 不会生效。
+- Wayland 原生渲染器在拖动主窗口标题栏时存在问题：窗口的左上角总是与鼠标指针对齐，这与 Wayland 原生应用的行为不一致。
