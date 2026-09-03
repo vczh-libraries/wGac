@@ -433,6 +433,7 @@ void WaylandSeat::pointer_axis(void* data, wl_pointer* pointer,
             info.ctrl = xkb_state_mod_name_is_active(self->xkb_state_, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0;
             info.shift = xkb_state_mod_name_is_active(self->xkb_state_, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE) > 0;
             info.alt = xkb_state_mod_name_is_active(self->xkb_state_, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE) > 0;
+            info.osSuper = xkb_state_mod_name_is_active(self->xkb_state_, XKB_MOD_NAME_LOGO, XKB_STATE_MODS_EFFECTIVE) > 0;
         }
 
         double delta = wl_fixed_to_double(value);
@@ -499,6 +500,7 @@ MouseEventInfo WaylandSeat::CreateMouseEventInfo() {
         info.ctrl = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0;
         info.shift = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE) > 0;
         info.alt = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE) > 0;
+        info.osSuper = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_LOGO, XKB_STATE_MODS_EFFECTIVE) > 0;
     }
 
     return info;
@@ -530,6 +532,7 @@ KeyEventInfo WaylandSeat::CreateKeyEventInfo(uint32_t key, KeyState state) {
         info.ctrl = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0;
         info.shift = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_EFFECTIVE) > 0;
         info.alt = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE) > 0;
+        info.osSuper = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_LOGO, XKB_STATE_MODS_EFFECTIVE) > 0;
         info.capsLock = xkb_state_mod_name_is_active(xkb_state_, XKB_MOD_NAME_CAPS, XKB_STATE_MODS_LOCKED) > 0;
     }
 

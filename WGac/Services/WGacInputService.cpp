@@ -41,6 +41,8 @@ WString WGacInputService::GetKeyNameInternal(VKEY code)
         case 0x28: return L"Down";
         case 0x2D: return L"Insert";
         case 0x2E: return L"Delete";
+        case 0x5B: return L"Super";
+        case 0x5C: return L"Super";
         default: break;
     }
 
@@ -119,7 +121,7 @@ VKEY WGacInputService::GetKey(const WString& name)
     return index == -1 ? VKEY::KEY_UNKNOWN : keys.Values()[index];
 }
 
-vint WGacInputService::RegisterGlobalShortcutKey(bool ctrl, bool shift, bool alt, VKEY code)
+vint WGacInputService::RegisterGlobalShortcutKey(bool ctrl, bool shift, bool alt, bool osSuper, VKEY code)
 {
     // Global shortcuts not fully implemented yet
     ++usedHotKeys;

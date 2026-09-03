@@ -20,6 +20,7 @@ public:
 
     INativeCursor* GetSystemCursor(INativeCursor::SystemCursorType type) override;
     INativeCursor* GetDefaultSystemCursor() override;
+    WString GetOSSuperKeyName() override;
     FontProperties GetDefaultFont() override;
     void SetDefaultFont(const FontProperties& value) override;
     void EnumerateFonts(collections::List<WString>& fonts) override;

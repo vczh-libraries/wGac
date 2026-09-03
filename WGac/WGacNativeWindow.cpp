@@ -1583,6 +1583,7 @@ void WGacNativeWindow::OnMouseMove(const MouseEventInfo& info) {
     nativeInfo.right = info.right;
     nativeInfo.ctrl = info.ctrl;
     nativeInfo.shift = info.shift;
+    nativeInfo.osSuper = info.osSuper;
     nativeInfo.wheel = 0;
     nativeInfo.nonClient = false;
     for (auto listener : listeners) {
@@ -1700,6 +1701,7 @@ void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
     nativeInfo.y = info.y;
     nativeInfo.ctrl = info.ctrl;
     nativeInfo.shift = info.shift;
+    nativeInfo.osSuper = info.osSuper;
     nativeInfo.wheel = 0;
     // A compositor-owned move/resize takes the pointer grab and may withhold
     // the release from this surface. Keep the callback, but prevent GacUI from
@@ -1709,35 +1711,36 @@ void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
     nativeInfo.middle = info.middle;
     nativeInfo.right = info.right;
 
+    NativeMouseButton nativeButton;
+    switch (static_cast<MouseButton>(info.button))
+    {
+    case MouseButton::Left:
+        nativeButton = NativeMouseButton::Left;
+        break;
+    case MouseButton::Middle:
+        nativeButton = NativeMouseButton::Middle;
+        break;
+    case MouseButton::Right:
+        nativeButton = NativeMouseButton::Right;
+        break;
+    case MouseButton::Mouse4:
+        nativeButton = NativeMouseButton::Mouse4;
+        break;
+    case MouseButton::Mouse5:
+        nativeButton = NativeMouseButton::Mouse5;
+        break;
+    default:
+        return;
+    }
+
     for (auto listener : listeners) {
         if (pressed) {
-            if (info.button == static_cast<uint32_t>(MouseButton::Left)) {
-                if (info.doubleClick) {
-                    listener->LeftButtonDoubleClick(nativeInfo);
-                } else {
-                    listener->LeftButtonDown(nativeInfo);
-                }
-            } else if (info.button == static_cast<uint32_t>(MouseButton::Right)) {
-                if (info.doubleClick) {
-                    listener->RightButtonDoubleClick(nativeInfo);
-                } else {
-                    listener->RightButtonDown(nativeInfo);
-                }
-            } else if (info.button == static_cast<uint32_t>(MouseButton::Middle)) {
-                if (info.doubleClick) {
-                    listener->MiddleButtonDoubleClick(nativeInfo);
-                } else {
-                    listener->MiddleButtonDown(nativeInfo);
-                }
+            listener->MouseDown(nativeButton, nativeInfo);
+            if (info.doubleClick) {
+                listener->MouseDoubleClick(nativeButton, nativeInfo);
             }
         } else {
-            if (info.button == static_cast<uint32_t>(MouseButton::Left)) {
-                listener->LeftButtonUp(nativeInfo);
-            } else if (info.button == static_cast<uint32_t>(MouseButton::Right)) {
-                listener->RightButtonUp(nativeInfo);
-            } else if (info.button == static_cast<uint32_t>(MouseButton::Middle)) {
-                listener->MiddleButtonUp(nativeInfo);
-            }
+            listener->MouseUp(nativeButton, nativeInfo);
         }
     }
 
@@ -1839,6 +1842,7 @@ void WGacNativeWindow::OnMouseScroll(const ScrollEventInfo& info) {
     nativeInfo.y = info.y;
     nativeInfo.ctrl = info.ctrl;
     nativeInfo.shift = info.shift;
+    nativeInfo.osSuper = info.osSuper;
     nativeInfo.left = false;
     nativeInfo.middle = false;
     nativeInfo.right = false;
@@ -1897,13 +1901,15 @@ static VKEY KeysymToVKey(uint32_t keysym) {
         case 0xffe4: return VKEY::KEY_CONTROL;   // XKB_KEY_Control_R
         case 0xffe9:                              // XKB_KEY_Alt_L
         case 0xffea: return VKEY::KEY_MENU;      // XKB_KEY_Alt_R
+        case 0xffeb: return VKEY::KEY_LWIN;      // XKB_KEY_Super_L
+        case 0xffec: return VKEY::KEY_RWIN;      // XKB_KEY_Super_R
         default: return VKEY::KEY_UNKNOWN;
     }
 }
 
 // Convert UTF-8 string to wchar_t characters and call Char() for each
 static void SendUtf8AsChars(INativeWindowListener* listener, const std::string& utf8,
-                            bool ctrl, bool shift, bool alt, bool capslock) {
+                            bool ctrl, bool shift, bool alt, bool osSuper, bool capslock) {
     const unsigned char* p = reinterpret_cast<const unsigned char*>(utf8.c_str());
     const unsigned char* end = p + utf8.size();
 
@@ -1947,6 +1953,7 @@ static void SendUtf8AsChars(INativeWindowListener* listener, const std::string& 
         charInfo.ctrl = ctrl;
         charInfo.shift = shift;
         charInfo.alt = alt;
+        charInfo.osSuper = osSuper;
         charInfo.capslock = capslock;
         listener->Char(charInfo);
     }
@@ -1958,14 +1965,15 @@ void WGacNativeWindow::OnKeyEvent(const KeyEventInfo& info) {
     nativeInfo.ctrl = info.ctrl;
     nativeInfo.shift = info.shift;
     nativeInfo.alt = info.alt;
+    nativeInfo.osSuper = info.osSuper;
     nativeInfo.capslock = info.capsLock;
 
     for (auto listener : listeners) {
         if (info.state == KeyState::Pressed) {
             listener->KeyDown(nativeInfo);
             // Send character events for printable text
-            if (!info.text.empty() && !info.ctrl && !info.alt) {
-                SendUtf8AsChars(listener, info.text, info.ctrl, info.shift, info.alt, info.capsLock);
+            if (!info.text.empty() && !info.ctrl && !info.alt && !info.osSuper) {
+                SendUtf8AsChars(listener, info.text, info.ctrl, info.shift, info.alt, info.osSuper, info.capsLock);
             }
         } else if (info.state == KeyState::Released) {
             listener->KeyUp(nativeInfo);
@@ -2011,7 +2019,7 @@ void WGacNativeWindow::OnTextInputPreedit(const PreeditInfo& info) {
 void WGacNativeWindow::OnTextInputCommit(const std::string& text) {
     // Convert UTF-8 to wchar_t and send as character events
     for (auto listener : listeners) {
-        SendUtf8AsChars(listener, text, false, false, false, false);
+        SendUtf8AsChars(listener, text, false, false, false, false, false);
     }
 }
 

@@ -28,7 +28,7 @@ public:
     bool IsKeyToggled(VKEY code) override;
     WString GetKeyName(VKEY code) override;
     VKEY GetKey(const WString& name) override;
-    vint RegisterGlobalShortcutKey(bool ctrl, bool shift, bool alt, VKEY code) override;
+    vint RegisterGlobalShortcutKey(bool ctrl, bool shift, bool alt, bool osSuper, VKEY code) override;
     bool UnregisterGlobalShortcutKey(vint id) override;
 
     void InitKeyMapping();

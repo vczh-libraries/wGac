@@ -70,6 +70,11 @@ INativeCursor* WGacResourceService::GetDefaultSystemCursor()
     return GetSystemCursor(INativeCursor::SystemCursorType::Arrow);
 }
 
+WString WGacResourceService::GetOSSuperKeyName()
+{
+    return WString::Unmanaged(L"Super");
+}
+
 INativeCursor* WGacResourceService::ResolveSystemCursor(INativeCursor* cursor)
 {
     if (cursor)

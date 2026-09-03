@@ -22,6 +22,8 @@ enum class MouseButton {
     Left = 0x110,    // BTN_LEFT
     Right = 0x111,   // BTN_RIGHT
     Middle = 0x112,  // BTN_MIDDLE
+    Mouse4 = 0x113,  // BTN_SIDE
+    Mouse5 = 0x114,  // BTN_EXTRA
 };
 
 // Key state
@@ -45,6 +47,7 @@ struct MouseEventInfo {
     bool ctrl = false;
     bool shift = false;
     bool alt = false;
+    bool osSuper = false;
 };
 
 // Keyboard event info
@@ -55,6 +58,7 @@ struct KeyEventInfo {
     bool ctrl = false;
     bool shift = false;
     bool alt = false;
+    bool osSuper = false;
     bool capsLock = false;
     std::string text;          // UTF-8 text for the key
 };
@@ -68,6 +72,7 @@ struct ScrollEventInfo {
     bool ctrl = false;
     bool shift = false;
     bool alt = false;
+    bool osSuper = false;
 };
 
 // IME preedit info
