@@ -43,6 +43,8 @@ WString WGacInputService::GetKeyNameInternal(VKEY code)
         case 0x2E: return L"Delete";
         case 0x5B: return L"Super";
         case 0x5C: return L"Super";
+        case (vint)VKEY::KEY_LEFT_BRACKET: return L"[";
+        case (vint)VKEY::KEY_RIGHT_BRACKET: return L"]";
         default: break;
     }
 

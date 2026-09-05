@@ -2895,6 +2895,8 @@ GuiWindow
 
 			void GuiWindow::EnvironmentChanged()
 			{
+				// child compositions or controls could be GuiInstanceRootObject
+				// recursive calling is necessary
 				NotifyUpdateDisplayFont();
 				List<GuiGraphicsComposition*> compositions;
 				compositions.Add(GetBoundsComposition());
@@ -4856,6 +4858,7 @@ GuiGraphicsHost
 					arguments.osSuper = info.osSuper;
 					arguments.ctrl = info.ctrl;
 					arguments.shift = info.shift;
+					arguments.alt = info.alt;
 					arguments.left = info.left;
 					arguments.middle = info.middle;
 					arguments.right = info.right;
@@ -40057,6 +40060,12 @@ GuiRemoteProtocolCoreChannel
 			channel->SendToClient(receiverClientId, package);
 		}
 		channel->BatchWrite(disconnected);
+		// Admission can detach this renderer while BatchWrite delivers responses.
+		// OnRead ignores detached responses, so the batch must be cancelled as well.
+		if (GetRendererClientId() != receiverClientId || !IsCorrectRendererClientId(receiverClientId))
+		{
+			disconnected = true;
+		}
 	}
 
 	IGuiRemoteEventProcessor* GuiRemoteProtocolCoreChannel::GetRemoteEventProcessor()
@@ -40356,6 +40365,12 @@ GuiRemoteEventFilter
 #undef ERROR_MESSAGE_PREFIX
 	}
 	
+	void GuiRemoteEventFilter::DiscardResponses()
+	{
+		responseIds.Clear();
+		filteredResponses.Clear();
+	}
+
 	void GuiRemoteEventFilter::ProcessEvents()
 	{
 #define EVENT_NODROP(NAME)
@@ -40656,7 +40671,7 @@ GuiRemoteProtocolFilter
 		GuiRemoteProtocolCombinator<GuiRemoteEventFilter>::Submit(disconnected);
 		if (disconnected)
 		{
-			eventCombinator.responseIds.Clear();
+			eventCombinator.DiscardResponses();
 		}
 		else
 		{
@@ -40667,6 +40682,7 @@ GuiRemoteProtocolFilter
 #undef ERROR_MESSAGE_PREFIX
 	}
 }
+
 
 /***********************************************************************
 .\PLATFORMPROVIDERS\REMOTE\GUIREMOTEPROTOCOL_FILTERVERIFIER.CPP
@@ -42554,6 +42570,7 @@ namespace vl::presentation::remoteprotocol
 		auto node = Ptr(new glr::json::JsonObject);
 		ConvertCustomTypeToJsonField(node, L"ctrl", value.ctrl);
 		ConvertCustomTypeToJsonField(node, L"shift", value.shift);
+		ConvertCustomTypeToJsonField(node, L"alt", value.alt);
 		ConvertCustomTypeToJsonField(node, L"osSuper", value.osSuper);
 		ConvertCustomTypeToJsonField(node, L"left", value.left);
 		ConvertCustomTypeToJsonField(node, L"middle", value.middle);
@@ -43461,6 +43478,7 @@ namespace vl::presentation::remoteprotocol
 		{
 			if (field->name.value == L"ctrl") ConvertJsonToCustomType(field->value, value.ctrl); else
 			if (field->name.value == L"shift") ConvertJsonToCustomType(field->value, value.shift); else
+			if (field->name.value == L"alt") ConvertJsonToCustomType(field->value, value.alt); else
 			if (field->name.value == L"osSuper") ConvertJsonToCustomType(field->value, value.osSuper); else
 			if (field->name.value == L"left") ConvertJsonToCustomType(field->value, value.left); else
 			if (field->name.value == L"middle") ConvertJsonToCustomType(field->value, value.middle); else
@@ -44627,7 +44645,7 @@ namespace vl::presentation::remote_renderer
 	void GuiRemoteRendererSingle::HorizontalWheel(const NativeWindowMouseInfo& info)
 	{
 		if (!CanSendEvents()) return;
-		if (pendingHWheel && pendingHWheel.Value().osSuper != info.osSuper) SendAccumulatedMessages();
+		if (pendingHWheel && (pendingHWheel.Value().alt != info.alt || pendingHWheel.Value().osSuper != info.osSuper)) SendAccumulatedMessages();
 		auto copy = info;
 		if (pendingHWheel) copy.wheel += pendingHWheel.Value().wheel;
 		pendingHWheel = copy;
@@ -44636,7 +44654,7 @@ namespace vl::presentation::remote_renderer
 	void GuiRemoteRendererSingle::VerticalWheel(const NativeWindowMouseInfo& info)
 	{
 		if (!CanSendEvents()) return;
-		if (pendingVWheel && pendingVWheel.Value().osSuper != info.osSuper) SendAccumulatedMessages();
+		if (pendingVWheel && (pendingVWheel.Value().alt != info.alt || pendingVWheel.Value().osSuper != info.osSuper)) SendAccumulatedMessages();
 		auto copy = info;
 		if (pendingVWheel) copy.wheel += pendingVWheel.Value().wheel;
 		pendingVWheel = copy;
@@ -65246,6 +65264,7 @@ RunIOCommandOnNativeWindow
 				NativeWindowMouseInfo info;
 				info.ctrl = IsCtrlPressing(state);
 				info.shift = IsShiftPressing(state);
+				info.alt = IsAltPressing(state);
 				info.osSuper = IsOSSuperPressing(state);
 				info.left = state->leftPressing;
 				info.middle = state->middlePressing;

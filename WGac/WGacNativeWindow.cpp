@@ -1549,6 +1549,17 @@ void WGacNativeWindow::OnMouseEnter(int32_t x, int32_t y) {
     NativeWindowMouseInfo nativeInfo = {};
     nativeInfo.x = x;
     nativeInfo.y = y;
+    if (auto inputSeat = display ? display->GetWaylandSeat() : nullptr)
+    {
+        auto info = inputSeat->CreateMouseEventInfo();
+        nativeInfo.left = info.left;
+        nativeInfo.middle = info.middle;
+        nativeInfo.right = info.right;
+        nativeInfo.ctrl = info.ctrl;
+        nativeInfo.shift = info.shift;
+        nativeInfo.alt = info.alt;
+        nativeInfo.osSuper = info.osSuper;
+    }
     for (auto listener : listeners) {
         listener->MouseMoving(nativeInfo);
     }
@@ -1583,6 +1594,7 @@ void WGacNativeWindow::OnMouseMove(const MouseEventInfo& info) {
     nativeInfo.right = info.right;
     nativeInfo.ctrl = info.ctrl;
     nativeInfo.shift = info.shift;
+    nativeInfo.alt = info.alt;
     nativeInfo.osSuper = info.osSuper;
     nativeInfo.wheel = 0;
     nativeInfo.nonClient = false;
@@ -1701,6 +1713,7 @@ void WGacNativeWindow::OnMouseButton(const MouseEventInfo& info, bool pressed) {
     nativeInfo.y = info.y;
     nativeInfo.ctrl = info.ctrl;
     nativeInfo.shift = info.shift;
+    nativeInfo.alt = info.alt;
     nativeInfo.osSuper = info.osSuper;
     nativeInfo.wheel = 0;
     // A compositor-owned move/resize takes the pointer grab and may withhold
@@ -1842,6 +1855,7 @@ void WGacNativeWindow::OnMouseScroll(const ScrollEventInfo& info) {
     nativeInfo.y = info.y;
     nativeInfo.ctrl = info.ctrl;
     nativeInfo.shift = info.shift;
+    nativeInfo.alt = info.alt;
     nativeInfo.osSuper = info.osSuper;
     nativeInfo.left = false;
     nativeInfo.middle = false;
@@ -1880,6 +1894,10 @@ static VKEY KeysymToVKey(uint32_t keysym) {
     }
     // Special keys
     switch (keysym) {
+        case '[':
+        case '{': return VKEY::KEY_LEFT_BRACKET;
+        case ']':
+        case '}': return VKEY::KEY_RIGHT_BRACKET;
         case 0xff08: return VKEY::KEY_BACK;      // XKB_KEY_BackSpace
         case 0xff09: return VKEY::KEY_TAB;       // XKB_KEY_Tab
         case 0xff0d: return VKEY::KEY_RETURN;    // XKB_KEY_Return

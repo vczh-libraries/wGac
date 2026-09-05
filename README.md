@@ -174,6 +174,13 @@ Renderer replacement can reuse port 8889 after the old renderer stops. For live 
 
 Follow [GacUI's native-renderer verification guide](../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md) for the complete RPT/FCT, replacement, takeover, and cleanup workflow.
 
+## Input Mapping
+
+Shared input declarations come from VlppOS. Mouse movement, initial hover,
+buttons, double clicks and both wheel axes preserve Alt independently of Super.
+Left/right brackets and shifted braces map to `KEY_LEFT_BRACKET` (`0xDB`) and
+`KEY_RIGHT_BRACKET` (`0xDD`); key-name lookup uses `[` and `]`.
+
 ## Known Limitations
 
 - Native Dialogs:

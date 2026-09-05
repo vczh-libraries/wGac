@@ -162,7 +162,6 @@ private:
     // Helper methods
     void UpdateModifiers(uint32_t mods_depressed, uint32_t mods_latched,
                         uint32_t mods_locked, uint32_t group);
-    MouseEventInfo CreateMouseEventInfo();
     KeyEventInfo CreateKeyEventInfo(uint32_t key, KeyState state);
     IWaylandWindow* FindWindowBySurface(wl_surface* surface);
     void ResetPointerState(bool clearCurrentInputSerial = true);
@@ -238,6 +237,9 @@ public:
     uint32_t GetCurrentInputSerial() const { return current_input_serial; }
 
     bool IsModifierPressed(uint32_t mod) const { return (modifiers & mod) != 0; }
+
+    // Snapshot used for the initial hover event as well as pointer callbacks.
+    MouseEventInfo CreateMouseEventInfo();
 
     // Cursor
     bool ApplyCursor(

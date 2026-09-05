@@ -172,6 +172,12 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 
 完整的 RPT/FCT、替换、接管和清理流程请参阅 [GacUI 原生渲染器验证指南](../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md)。
 
+## 输入映射
+
+共享输入声明来自 VlppOS。鼠标移动、首次悬停、按钮、双击和两个滚轮轴均独立保留 Alt 与 Super 状态。
+左右方括号及按住 Shift 输入的大括号分别映射为 `KEY_LEFT_BRACKET`（`0xDB`）和
+`KEY_RIGHT_BRACKET`（`0xDD`）；按键名称查询使用 `[` 和 `]`。
+
 ## 已知限制
 
 - 原生对话框：
