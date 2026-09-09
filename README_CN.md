@@ -177,12 +177,13 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 
 ## 输入映射
 
-共享输入声明来自 VlppOS。鼠标移动、首次悬停、按钮、双击和两个滚轮轴均独立保留 Alt 与 Super 状态。
+原生 Wayland 输入使用 VlppOS 的共享声明。鼠标移动、首次悬停、按钮、双击和两个滚轮轴均独立保留 Alt 与 Super 状态。
 左右方括号及按住 Shift 输入的大括号分别映射为 `KEY_LEFT_BRACKET`（`0xDB`）和
 `KEY_RIGHT_BRACKET`（`0xDD`）；按键名称查询使用 `[` 和 `]`。
 
 ## 已知限制
 
+- 终端输入有独立的修饰键和快捷键限制；请参阅[终端输入限制](#终端输入限制)，了解 Kitty 的使用方式及仍然存在的限制。
 - 原生对话框：
   - 打开和保存文件已实现原生 FileChooser Portal。
   - 消息框尚未实现。
@@ -206,8 +207,24 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 
 TUI 剪贴板使用 X11 selection（编译依赖包括 `libx11-dev`、`libxfixes-dev`）。在 Wayland 桌面中，XWayland 负责与其他桌面应用互通，请保留 `DISPLAY`。没有 X display 时，剪贴板对象仅在进程内共享。外部传输为 UTF-8 文本，富文档和图像对象只在应用内保留。XFixes 所有权通知会更新依赖剪贴板状态的命令。其他客户端读取 selection 时，本应用必须仍在运行。支持接收增量 selection；发送文本的大小不能超过 X 服务器的最大请求长度。
 
-兼容 Kitty 协议的终端会将 Super 与 Alt 分别上报；旧终端的 Meta 仍映射为 Alt，SGR 鼠标协议没有 Super 位。当前请求的消歧模式不单独上报修饰键，因此不能通过单按 Alt 显示访问键；仍可使用鼠标和方向键操作菜单。全局快捷键保留现有 wGac 限制。正常 Hide、Close 和 Stop 会恢复终端输入输出模式；关闭终端标签页不能替代正常退出测试。
-
-测试 Window Manager 的 **Ctrl+Alt+Super+Q** 时，请使用兼容 Kitty 键盘协议的终端。GNOME Terminal 3.52.0 / VTE 0.76.0 会丢弃 Super，发送与 Ctrl+Alt+Q 相同的字节，VlppOS 因而无法区分这两个组合。**Ctrl+Alt+Super+Shift+F8** 被声明为全局快捷键，没有本地按键回退路径。wGac 的全局注册目前仅为占位实现，因此即使终端正确上报 Super，该命令仍不可用；这与 VlppOS 的修饰键映射是两个独立问题。
+正常 Hide、Close 和 Stop 会恢复终端输入输出模式；关闭终端标签页不能替代正常退出测试。
 
 TUI provider 在启动工作线程前根据环境初始化 `LC_CTYPE`，以支持原生文件/图像服务中的 Unicode 文件名；请使用 UTF-8 locale。现有 POSIX locale 服务的日期和数字格式仍采用 en-US，展示程序的翻译标签和对话框则按应用选定语言切换。
+
+### 终端输入限制
+
+本地快捷键 **Ctrl+Alt+Super+Q** 要求终端将 Super 与 Alt 分别上报。GNOME Terminal 3.52.0 / VTE 0.76.0 会丢弃 Super，发送与 Ctrl+Alt+Q 相同的字节。限制发生在终端编码输入时：GNOME/Wayland 会将 Super 传递给获得焦点的终端，但 TUI 进程只能收到终端输出的字节。原生 Wayland 渲染器则直接接收属于其自身焦点窗口的修饰键状态。
+
+请使用 [Kitty](https://sw.kovidgoyal.net/kitty/) 运行本地 Super 快捷键。可以将 Kitty 与 GNOME Terminal 同时安装，打开 Kitty 窗口后，在 `wGac` 目录运行现有应用：
+
+```bash
+./test.sh --app:tui
+```
+
+VlppOS 会自动启用 Kitty 键盘协议并解析 Super；无需修改应用代码、升级桌面或特别配置键盘协议。[Linux 验证记录](TestMatrix_Tui.md)已确认，在 GNOME Wayland/XWayland 下使用 Kitty 0.32.2 时，左右两个 Super 键均可触发 Ctrl+Alt+Super+Q。
+
+使用 Kitty 后仍有以下限制：
+
+- **Ctrl+Alt+Super+Shift+F8** 是全局快捷键，没有本地按键回退路径。wGac 的全局注册目前仅为占位实现，因此即使终端正确上报 Super，该命令仍需要单独实现。
+- 标准 SGR 鼠标报告没有 Super 位，因此鼠标 `osSuper` 保持为 false。旧终端的 Meta 仍映射为 Alt。
+- 当前请求的键盘模式不单独上报修饰键，因此不能通过单按 Alt 显示访问键提示；仍可使用鼠标和方向键操作菜单。

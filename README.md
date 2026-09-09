@@ -163,11 +163,27 @@ Always stop background test processes when verification is complete.
 
 The TUI clipboard uses X11 selections (`libx11-dev` and `libxfixes-dev` are build prerequisites). On a Wayland desktop, XWayland supplies the bridge to other desktop applications; keep `DISPLAY` available. Without an X display, clipboard objects remain process-local. External transfers use UTF-8 text; rich documents and images remain available within the application. XFixes ownership notifications update clipboard-dependent commands. The app must remain running while another client reads its selection. Incoming incremental selections are supported; outgoing text must fit the X server's maximum request size.
 
-Kitty-compatible terminals report Super independently of Alt. Legacy terminal Meta remains Alt; SGR mouse input has no Super bit. The requested disambiguation mode does not report standalone modifier keys, so Alt-only access-key overlays are unavailable; menu mouse/arrow navigation remains usable. Global shortcuts retain the existing wGac limitation. Normal Hide, Close and Stop actions restore terminal input and output modes; terminal-tab close is not the normal shutdown test.
-
-For the Window Manager shortcut checks, use a Kitty-compatible terminal for **Ctrl+Alt+Super+Q**. GNOME Terminal 3.52.0 / VTE 0.76.0 discards Super and sends the same bytes as Ctrl+Alt+Q, so VlppOS cannot distinguish them. **Ctrl+Alt+Super+Shift+F8** is declared as a global shortcut and has no local-key fallback. The wGac global registration implementation is a stub, so that command remains unavailable even when a terminal correctly reports Super. This is separate from the VlppOS modifier mapping.
+Normal Hide, Close and Stop actions restore terminal input and output modes; terminal-tab close is not the normal shutdown test.
 
 The provider initializes `LC_CTYPE` from the environment before starting workers, so native file/image services can decode Unicode filenames. Use a UTF-8 locale. The existing POSIX locale service retains en-US date/number formatting; translated showcase labels and dialogs still follow the selected application locale.
+
+### Terminal input limitations
+
+Local **Ctrl+Alt+Super+Q** requires a terminal that reports Super independently of Alt. GNOME Terminal 3.52.0 / VTE 0.76.0 discards Super and sends the same bytes as Ctrl+Alt+Q. This limitation occurs when the terminal encodes input: GNOME/Wayland delivers Super to the focused terminal, but the TUI process receives only its output bytes. Native Wayland rendering receives the modifier directly for its own focused window.
+
+Use [Kitty](https://sw.kovidgoyal.net/kitty/) for the local Super shortcut. Install it alongside GNOME Terminal, open a Kitty window, and run the existing application from the `wGac` directory:
+
+```bash
+./test.sh --app:tui
+```
+
+VlppOS automatically enables Kitty's keyboard protocol and decodes Super; no application code changes, desktop upgrade or special keyboard-protocol configuration are required. The [Linux verification record](TestMatrix_Tui.md) confirms Ctrl+Alt+Super+Q with both Super keys in Kitty 0.32.2 under GNOME Wayland/XWayland.
+
+The following limitations remain when using Kitty:
+
+- **Ctrl+Alt+Super+Shift+F8** is a global shortcut with no local-key fallback. wGac's global registration is a stub, so this command requires a separate implementation even when the terminal reports Super correctly.
+- Standard SGR mouse reports have no Super bit, so mouse `osSuper` remains false. Legacy terminal Meta continues to map to Alt.
+- The requested keyboard mode does not report standalone modifier keys, so pressing Alt alone cannot show access-key overlays. Mouse and arrow-key menu navigation remain available.
 
 ## Native Remote Renderer
 
@@ -193,13 +209,14 @@ Follow [GacUI's native-renderer verification guide](../GacUI/.github/Jobs/DebugR
 
 ## Input Mapping
 
-Shared input declarations come from VlppOS. Mouse movement, initial hover,
+Native Wayland input uses the shared declarations from VlppOS. Mouse movement, initial hover,
 buttons, double clicks and both wheel axes preserve Alt independently of Super.
 Left/right brackets and shifted braces map to `KEY_LEFT_BRACKET` (`0xDB`) and
 `KEY_RIGHT_BRACKET` (`0xDD`); key-name lookup uses `[` and `]`.
 
 ## Known Limitations
 
+- Terminal input has separate modifier and shortcut limitations; see [Terminal input limitations](#terminal-input-limitations) for the Kitty setup and remaining restrictions.
 - Native Dialogs:
   - The native FileChooser portal is implemented for open and save dialogs.
   - Message box not implemented.
