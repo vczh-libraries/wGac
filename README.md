@@ -165,6 +165,8 @@ The TUI clipboard uses X11 selections (`libx11-dev` and `libxfixes-dev` are buil
 
 Kitty-compatible terminals report Super independently of Alt. Legacy terminal Meta remains Alt; SGR mouse input has no Super bit. The requested disambiguation mode does not report standalone modifier keys, so Alt-only access-key overlays are unavailable; menu mouse/arrow navigation remains usable. Global shortcuts retain the existing wGac limitation. Normal Hide, Close and Stop actions restore terminal input and output modes; terminal-tab close is not the normal shutdown test.
 
+For the Window Manager shortcut checks, use a Kitty-compatible terminal for **Ctrl+Alt+Super+Q**. GNOME Terminal 3.52.0 / VTE 0.76.0 discards Super and sends the same bytes as Ctrl+Alt+Q, so VlppOS cannot distinguish them. **Ctrl+Alt+Super+Shift+F8** is declared as a global shortcut and has no local-key fallback. The wGac global registration implementation is a stub, so that command remains unavailable even when a terminal correctly reports Super. This is separate from the VlppOS modifier mapping.
+
 The provider initializes `LC_CTYPE` from the environment before starting workers, so native file/image services can decode Unicode filenames. Use a UTF-8 locale. The existing POSIX locale service retains en-US date/number formatting; translated showcase labels and dialogs still follow the selected application locale.
 
 ## Native Remote Renderer

@@ -208,4 +208,6 @@ TUI 剪贴板使用 X11 selection（编译依赖包括 `libx11-dev`、`libxfixes
 
 兼容 Kitty 协议的终端会将 Super 与 Alt 分别上报；旧终端的 Meta 仍映射为 Alt，SGR 鼠标协议没有 Super 位。当前请求的消歧模式不单独上报修饰键，因此不能通过单按 Alt 显示访问键；仍可使用鼠标和方向键操作菜单。全局快捷键保留现有 wGac 限制。正常 Hide、Close 和 Stop 会恢复终端输入输出模式；关闭终端标签页不能替代正常退出测试。
 
+测试 Window Manager 的 **Ctrl+Alt+Super+Q** 时，请使用兼容 Kitty 键盘协议的终端。GNOME Terminal 3.52.0 / VTE 0.76.0 会丢弃 Super，发送与 Ctrl+Alt+Q 相同的字节，VlppOS 因而无法区分这两个组合。**Ctrl+Alt+Super+Shift+F8** 被声明为全局快捷键，没有本地按键回退路径。wGac 的全局注册目前仅为占位实现，因此即使终端正确上报 Super，该命令仍不可用；这与 VlppOS 的修饰键映射是两个独立问题。
+
 TUI provider 在启动工作线程前根据环境初始化 `LC_CTYPE`，以支持原生文件/图像服务中的 Unicode 文件名；请使用 UTF-8 locale。现有 POSIX locale 服务的日期和数字格式仍采用 en-US，展示程序的翻译标签和对话框则按应用选定语言切换。
