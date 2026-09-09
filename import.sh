@@ -31,7 +31,7 @@ for dest_dir in "$DEST_DIR" "$DEST_TEST_DIR"; do
 done
 
 rm -rf "$DEST_DIR" "$DEST_TEST_DIR"
-mkdir -p "$DEST_DIR/Skins/DarkSkin"
+mkdir -p "$DEST_DIR/Skins/DarkSkin" "$DEST_DIR/Skins/TuiSkin"
 mkdir -p "$DEST_TEST_DIR"
 
 cp -R "$SOURCE_IMPORT_DIR/." "$DEST_DIR/"
@@ -45,6 +45,8 @@ cp "$SOURCE_RELEASE_DIR"/GacUI*.h "$DEST_DIR/"
 cp "$SOURCE_RELEASE_DIR"/GacUI*.cpp "$DEST_DIR/"
 cp "$SOURCE_RELEASE_DIR"/DarkSkin*.h "$DEST_DIR/Skins/DarkSkin/"
 cp "$SOURCE_RELEASE_DIR"/DarkSkin*.cpp "$DEST_DIR/Skins/DarkSkin/"
+cp "$SOURCE_RELEASE_DIR"/TuiSkin*.h "$DEST_DIR/Skins/TuiSkin/"
+cp "$SOURCE_RELEASE_DIR"/TuiSkin*.cpp "$DEST_DIR/Skins/TuiSkin/"
 cp "$SOURCE_RELEASE_DIR/Test.RemotingHelpers.h" "$DEST_DIR/"
 cp "$SOURCE_RELEASE_DIR/Test.RemotingHelpers.cpp" "$DEST_DIR/"
 
@@ -55,6 +57,8 @@ perl -pi -e 's/\r?\n/\r\n/g' \
     "$DEST_DIR"/GacUI*.cpp \
     "$DEST_DIR"/Skins/DarkSkin/DarkSkin*.h \
     "$DEST_DIR"/Skins/DarkSkin/DarkSkin*.cpp \
+    "$DEST_DIR"/Skins/TuiSkin/TuiSkin*.h \
+    "$DEST_DIR"/Skins/TuiSkin/TuiSkin*.cpp \
     "$DEST_DIR"/Test.RemotingHelpers.h \
     "$DEST_DIR"/Test.RemotingHelpers.cpp
 

@@ -38,6 +38,7 @@ wGac/
 ├── WGacShared/                        GacUI、wGac 和共享测试库
 ├── WGacTest/                          Hello World 测试应用
 ├── WGacFullControlTest/               标准或 Hosted 模式的 Full Control Test
+├── WGacTuiControlTest/                使用 TuiSkin 的终端控件展示
 ├── WGacCppTestRvm/                    Remote View Model Test 客户端
 ├── RemotingTest_Rendering_Wayland/    RemotingTest_Core 的原生渲染器
 ├── Apps/                              同步的资源和生成的 C++ 源码
@@ -68,15 +69,15 @@ wGac/
 ./import.sh
 ```
 
-该脚本会重新创建 `Import/` 和 `Import-Test/`，从 `../GacUI/Import/` 和 `../GacUI/Release/` 复制常规框架文件，加入 DarkSkin 的 Release 源码，把中立 `Test.RemotingHelpers` 文件对移动到 `Import-Test/`，并将两个快照都设为只读。导入的 `VlppOS.Linux.cpp` 提供 stdio 传输实现。
+该脚本会重新创建 `Import/` 和 `Import-Test/`，从 `../GacUI/Import/` 和 `../GacUI/Release/` 复制常规框架文件，加入 DarkSkin 和 TuiSkin 的 Release 源码，把中立 `Test.RemotingHelpers` 文件对移动到 `Import-Test/`，并将两个快照都设为只读。导入的 `VlppOS.Linux.cpp` 提供 stdio 传输实现。
 
-刷新 Full Control Test、Remote Protocol Test 和 Remote View Model Test：
+刷新终端控件展示、Full Control Test、Remote Protocol Test 和 Remote View Model Test：
 
 ```bash
 ./syncProj.sh
 ```
 
-该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制三个上游资源目录，保留资源自带的种子 C++ 文件，并在 `Apps/` 中重新生成 x64 C++ 源码。它还会刷新共享的原生渲染器入口、RVM 入口和 RVM 初始化文件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `Import-Test/`；二者都不再以本地 `WGacShared/Mini*.cpp` 副本维护。
+该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制四个上游资源目录，保留资源自带的种子 C++ 文件，并在 `Apps/` 中重新生成 x64 C++ 源码。它还会从 `CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口和 RVM 初始化文件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `Import-Test/`；二者都不再以本地 `WGacShared/Mini*.cpp` 副本维护。
 
 ## 编译
 
@@ -95,11 +96,13 @@ wGac/
 - `Test_HellWorld_Cpp`。
 - `Test_FullControlTest`。
 - `Test_CppTest_Rvm`。
+- `WGacTui` 和 `Test_TuiControlTest`。
 - `RemotingTest_Rendering_Wayland`。
 
 ## 运行和自动化
 
 ```bash
+./test.sh --app:tui
 ./test.sh --app:simple
 ./test.sh --app:simple --unblock
 ./test.sh --app:fct
@@ -194,3 +197,15 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 
 - 全局快捷键尚未实现。在运行 `test.sh --app:fct` 时，按 `CTRL+SHIFT+ALT+SUPER+Q` 不会生效。
 - Wayland 原生渲染器在拖动主窗口标题栏时存在问题：窗口的左上角总是与鼠标指针对齐，这与 Wayland 原生应用的行为不一致。
+
+## 终端控件展示
+
+`./test.sh --app:tui` 在当前终端中以前台方式运行 Hosted GacUI 控件展示，要求 stdin/stdout 连接交互式终端；拒绝 `--unblock`、`--hosted` 和 `--port`，不提供 HTTP 自动化接口。请从 120x40 单元开始，再测试 80x25，并遵循 [TUI SOP](../GacUI/.github/Jobs/DebugTuiControlTestSop.md)。当前结果记录在 [TestMatrix_Tui.md](TestMatrix_Tui.md)。
+
+`WGac/TUI` 将 `TuiControllerBase` 与现有 wGac 字体/光标、按键名称和图像服务组合。计时器使用 VlppOS 所在线程的事件循环，所有窗口和对话框都绘制在终端单元中，不创建 Wayland surface 或 libdecor 窗口。字体度量固定为 `TuiFont`、字号 1，实际字体和颜色由终端决定。
+
+TUI 剪贴板使用 X11 selection（编译依赖包括 `libx11-dev`、`libxfixes-dev`）。在 Wayland 桌面中，XWayland 负责与其他桌面应用互通，请保留 `DISPLAY`。没有 X display 时，剪贴板对象仅在进程内共享。外部传输为 UTF-8 文本，富文档和图像对象只在应用内保留。XFixes 所有权通知会更新依赖剪贴板状态的命令。其他客户端读取 selection 时，本应用必须仍在运行。支持接收增量 selection；发送文本的大小不能超过 X 服务器的最大请求长度。
+
+兼容 Kitty 协议的终端会将 Super 与 Alt 分别上报；旧终端的 Meta 仍映射为 Alt，SGR 鼠标协议没有 Super 位。当前请求的消歧模式不单独上报修饰键，因此不能通过单按 Alt 显示访问键；仍可使用鼠标和方向键操作菜单。全局快捷键保留现有 wGac 限制。正常 Hide、Close 和 Stop 会恢复终端输入输出模式；关闭终端标签页不能替代正常退出测试。
+
+TUI provider 在启动工作线程前根据环境初始化 `LC_CTYPE`，以支持原生文件/图像服务中的 Unicode 文件名；请使用 UTF-8 locale。现有 POSIX locale 服务的日期和数字格式仍采用 en-US，展示程序的翻译标签和对话框则按应用选定语言切换。

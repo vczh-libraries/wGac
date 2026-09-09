@@ -13,6 +13,7 @@ usage() {
 Usage:
   ./test.sh --app:simple [--unblock]
   ./test.sh --app:fct [--hosted] [--unblock]
+  ./test.sh --app:tui
   ./test.sh --app:rvmt [--unblock]
   ./test.sh --app:renderer [--port:<1-65535>] [--unblock]
 EOF
@@ -25,6 +26,9 @@ for argument in "$@"; do
             ;;
         --app:fct)
             APP_NAME="fct"
+            ;;
+        --app:tui)
+            APP_NAME="tui"
             ;;
         --app:rvmt)
             APP_NAME="rvmt"
@@ -64,6 +68,17 @@ case "$APP_NAME" in
         ;;
     fct)
         APP="$SCRIPT_DIR/build/WGacFullControlTest/bin/Test_FullControlTest"
+        ;;
+    tui)
+        if [[ "$HOSTED" -eq 1 || "$UNBLOCK" -eq 1 ]]; then
+            echo "--app:tui owns the foreground terminal; --hosted and --unblock are unsupported." >&2
+            exit 1
+        fi
+        if [[ ! -t 0 || ! -t 1 ]]; then
+            echo "--app:tui requires interactive terminal input and output." >&2
+            exit 1
+        fi
+        APP="$SCRIPT_DIR/build/WGacTuiControlTest/bin/Test_TuiControlTest"
         ;;
     rvmt)
         if [[ "$HOSTED" -eq 1 ]]; then

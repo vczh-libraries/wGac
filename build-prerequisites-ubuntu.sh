@@ -26,6 +26,8 @@ PACKAGES=(
     pkg-config
     libwayland-dev
     libxkbcommon-dev
+    libx11-dev
+    libxfixes-dev
     libdecor-0-dev
     libdecor-0-plugin-1-gtk
     libcairo2-dev

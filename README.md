@@ -38,6 +38,7 @@ wGac/
 ├── WGacShared/                        GacUI, wGac, and shared test libraries
 ├── WGacTest/                          Hello World test app
 ├── WGacFullControlTest/               Full Control Test, standard or hosted
+├── WGacTuiControlTest/                Terminal Control Showcase using TuiSkin
 ├── WGacCppTestRvm/                    Remote View Model Test client
 ├── RemotingTest_Rendering_Wayland/    Native renderer for RemotingTest_Core
 ├── Apps/                              Synchronized resources and generated C++
@@ -68,15 +69,15 @@ Refresh the imported framework snapshot:
 ./import.sh
 ```
 
-This replaces `Import/` and `Import-Test/`, copies the ordinary framework files from `../GacUI/Import/` and `../GacUI/Release/`, adds the DarkSkin release sources, moves the neutral `Test.RemotingHelpers` pair into `Import-Test/`, and marks both snapshots read-only. The imported `VlppOS.Linux.cpp` supplies the stdio transport implementation.
+This replaces `Import/` and `Import-Test/`, copies the ordinary framework files from `../GacUI/Import/` and `../GacUI/Release/`, adds the DarkSkin and TuiSkin release sources, moves the neutral `Test.RemotingHelpers` pair into `Import-Test/`, and marks both snapshots read-only. The imported `VlppOS.Linux.cpp` supplies the stdio transport implementation.
 
-Refresh the Full Control Test, Remote Protocol Test, and Remote View Model Test projects:
+Refresh the Terminal Control Showcase, Full Control Test, Remote Protocol Test, and Remote View Model Test projects:
 
 ```bash
 ./syncProj.sh
 ```
 
-This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all three upstream resource trees, preserves resource-owned seed C++ files, and regenerates their x64 C++ sources under `Apps/`. It also refreshes the shared native-renderer and RVM entry points and the RVM initializer. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `Import-Test/`; neither is maintained as a local `WGacShared/Mini*.cpp` copy.
+This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all four upstream resource trees, preserves resource-owned seed C++ files, and regenerates their x64 C++ sources under `Apps/`. It also copies the shared TUI GuiMain from `CppTest_Tui/Main.cpp` and refreshes the shared native-renderer and RVM entry points and the RVM initializer. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `Import-Test/`; neither is maintained as a local `WGacShared/Mini*.cpp` copy.
 
 ## Building
 
@@ -95,11 +96,13 @@ The root CMake project uses C++23 and builds:
 - `Test_HellWorld_Cpp`.
 - `Test_FullControlTest`.
 - `Test_CppTest_Rvm`.
+- `WGacTui` and `Test_TuiControlTest`.
 - `RemotingTest_Rendering_Wayland`.
 
 ## Running and Automation
 
 ```bash
+./test.sh --app:tui
 ./test.sh --app:simple
 ./test.sh --app:simple --unblock
 ./test.sh --app:fct
@@ -151,6 +154,18 @@ Always stop background test processes when verification is complete.
 ```bash
 ../GacUI/Test/Linux/RemotingTest_RvmHost/Bin/RemotingTest_RvmHost /MiniHttp
 ```
+
+## Terminal Control Showcase
+
+`./test.sh --app:tui` runs the hosted GacUI showcase directly in the current terminal. It requires interactive stdin/stdout and runs in the foreground; `--unblock`, `--hosted`, and `--port` are rejected. It has no HTTP automation endpoint. Start at 120x40 cells, also test 80x25, and follow [the TUI SOP](../GacUI/.github/Jobs/DebugTuiControlTestSop.md). Current results are in [TestMatrix_Tui.md](TestMatrix_Tui.md).
+
+`WGac/TUI` composes `TuiControllerBase` with the existing wGac font/cursor, key-name and image services. Timers use the VlppOS owner-thread pump, and all windows and dialogs render in terminal cells. No Wayland surface or libdecor window is created. Font metrics remain `TuiFont`, size 1. The terminal determines displayed fonts and colors.
+
+The TUI clipboard uses X11 selections (`libx11-dev` and `libxfixes-dev` are build prerequisites). On a Wayland desktop, XWayland supplies the bridge to other desktop applications; keep `DISPLAY` available. Without an X display, clipboard objects remain process-local. External transfers use UTF-8 text; rich documents and images remain available within the application. XFixes ownership notifications update clipboard-dependent commands. The app must remain running while another client reads its selection. Incoming incremental selections are supported; outgoing text must fit the X server's maximum request size.
+
+Kitty-compatible terminals report Super independently of Alt. Legacy terminal Meta remains Alt; SGR mouse input has no Super bit. The requested disambiguation mode does not report standalone modifier keys, so Alt-only access-key overlays are unavailable; menu mouse/arrow navigation remains usable. Global shortcuts retain the existing wGac limitation. Normal Hide, Close and Stop actions restore terminal input and output modes; terminal-tab close is not the normal shutdown test.
+
+The provider initializes `LC_CTYPE` from the environment before starting workers, so native file/image services can decode Unicode filenames. Use a UTF-8 locale. The existing POSIX locale service retains en-US date/number formatting; translated showcase labels and dialogs still follow the selected application locale.
 
 ## Native Remote Renderer
 
