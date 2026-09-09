@@ -181,7 +181,7 @@ VlppOS automatically enables Kitty's keyboard protocol and decodes Super; no app
 
 The following limitations remain when using Kitty:
 
-- **Ctrl+Alt+Super+Shift+F8** is a global shortcut with no local-key fallback. wGac's global registration is a stub, so this command requires a separate implementation even when the terminal reports Super correctly.
+- **Ctrl+Alt+Super+Shift+F8** is a global shortcut with no local-key fallback. wGac's global registration is a stub, so this command requires a separate implementation even when the terminal reports Super correctly. See [Global shortcuts](#global-shortcuts) for desktop requirements.
 - Standard SGR mouse reports have no Super bit, so mouse `osSuper` remains false. Legacy terminal Meta continues to map to Alt.
 - The requested keyboard mode does not report standalone modifier keys, so pressing Alt alone cannot show access-key overlays. Mouse and arrow-key menu navigation remain available.
 
@@ -227,7 +227,12 @@ Left/right brackets and shifted braces map to `KEY_LEFT_BRACKET` (`0xDB`) and
 - libdecor has no platform-frame window-icon API, so `IconVisible` is unsupported and always reports `false`.
 - libdecor cannot independently hide the maximize control. Its maximize affordance follows `SizeBox` (the frame's resize capability); `MaximizedBox` retains its requested value but cannot override that platform limitation.
 
+### Global shortcuts
+
+Global shortcuts are not implemented in wGac. In `./test.sh --app:fct`, **Ctrl+Shift+Alt+Super+Q** does not work; the TUI showcase's global **Ctrl+Alt+Super+Shift+F8** is also unavailable.
+
+GNOME supports the GlobalShortcuts desktop portal starting with [GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts). For users staying on Ubuntu LTS releases, [Ubuntu 26.04 LTS includes GNOME 50](https://documentation.ubuntu.com/release-notes/26.04/changes-since-previous-interim/#gnome-50) and provides this desktop support. GNOME 48 and 49 also support the portal, so GNOME 50 is not the minimum requirement. Upgrading supplies the desktop capability, but wGac still needs to implement portal registration and activation handling before global shortcuts can work in either native or TUI applications.
+
 ## Bugs
 
-- Global shortcut key is not implemented, in `test.sh --app:fct` pressing `CTRL+SHIFT+ALT+SUPER+Q` does not work.
 - Wayland native renderer has an issue of dragging main window title, the window always align its left-top corner to the cursor, which is not consistent with Wayland native app.

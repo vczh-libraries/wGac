@@ -194,9 +194,14 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 - libdecor 没有设置平台边框窗口图标的 API，因此不支持 `IconVisible`，其 getter 始终返回 `false`。
 - libdecor 无法单独隐藏最大化控件。最大化操作入口由 `SizeBox`（边框的缩放能力）决定；`MaximizedBox` 会保留并返回请求值，但无法突破这一平台限制。
 
+### 全局快捷键
+
+wGac 尚未实现全局快捷键。在运行 `./test.sh --app:fct` 时，**Ctrl+Shift+Alt+Super+Q** 不会生效；TUI 展示程序的全局快捷键 **Ctrl+Alt+Super+Shift+F8** 也不可用。
+
+GNOME 从 [GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts) 开始支持 GlobalShortcuts 桌面 Portal。对于只使用 Ubuntu LTS 版本的用户，[Ubuntu 26.04 LTS 搭载 GNOME 50](https://documentation.ubuntu.com/release-notes/26.04/changes-since-previous-interim/#gnome-50)，提供了这一桌面支持。GNOME 48 和 49 也支持该 Portal，因此最低要求并非 GNOME 50。升级仅提供桌面端能力；wGac 仍需实现通过 Portal 注册快捷键及处理触发事件，原生应用和 TUI 应用的全局快捷键才能生效。
+
 ## 缺陷
 
-- 全局快捷键尚未实现。在运行 `test.sh --app:fct` 时，按 `CTRL+SHIFT+ALT+SUPER+Q` 不会生效。
 - Wayland 原生渲染器在拖动主窗口标题栏时存在问题：窗口的左上角总是与鼠标指针对齐，这与 Wayland 原生应用的行为不一致。
 
 ## 终端控件展示
@@ -225,6 +230,6 @@ VlppOS 会自动启用 Kitty 键盘协议并解析 Super；无需修改应用代
 
 使用 Kitty 后仍有以下限制：
 
-- **Ctrl+Alt+Super+Shift+F8** 是全局快捷键，没有本地按键回退路径。wGac 的全局注册目前仅为占位实现，因此即使终端正确上报 Super，该命令仍需要单独实现。
+- **Ctrl+Alt+Super+Shift+F8** 是全局快捷键，没有本地按键回退路径。wGac 的全局注册目前仅为占位实现，因此即使终端正确上报 Super，该命令仍需要单独实现。桌面环境要求请参阅[全局快捷键](#全局快捷键)。
 - 标准 SGR 鼠标报告没有 Super 位，因此鼠标 `osSuper` 保持为 false。旧终端的 Meta 仍映射为 Alt。
 - 当前请求的键盘模式不单独上报修饰键，因此不能通过单按 Alt 显示访问键提示；仍可使用鼠标和方向键操作菜单。
