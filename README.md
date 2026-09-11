@@ -97,6 +97,8 @@ This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all
 
 The first command is incremental. `--rebuild` removes only the `build/` directory and performs a clean build. Dependency discovery remains in CMake; when an Ubuntu machine is missing the required system packages, run `sudo ./build-prerequisites-ubuntu.sh` once and retry the build.
 
+CMake discards cached X11 header and library paths that no longer exist, such as paths into a deleted temporary sysroot, and searches again. The TUI clipboard requires `libx11-dev` and `libxfixes-dev`; install them through the prerequisite script if discovery fails.
+
 The root CMake project uses C++23 and builds:
 
 - `GacUI`, the imported GacUI framework.

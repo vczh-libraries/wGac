@@ -97,6 +97,8 @@ wGac/
 
 第一个命令执行增量编译。`--rebuild` 只删除 `build/` 目录并执行全量编译。依赖检测仍由 CMake 负责；如果 Ubuntu 缺少所需的系统软件包，请运行一次 `sudo ./build-prerequisites-ubuntu.sh`，然后重试编译。
 
+CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（例如指向已删除的临时 sysroot 的路径），并重新搜索。TUI 剪贴板需要 `libx11-dev` 和 `libxfixes-dev`；如果依赖检测失败，请通过依赖安装脚本安装这些软件包。
+
 根 CMake 项目使用 C++23，并编译：
 
 - `GacUI`：导入的 GacUI 框架。
