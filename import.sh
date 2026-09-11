@@ -35,6 +35,7 @@ mkdir -p "$DEST_DIR/Skins/DarkSkin" "$DEST_DIR/Skins/TuiSkin"
 mkdir -p "$DEST_TEST_DIR"
 
 cp -R "$SOURCE_IMPORT_DIR/." "$DEST_DIR/"
+chmod -R u+w "$DEST_DIR"
 
 # GacUI normalizes dependency imports through Git, but generated working-tree
 # copies can still use CRLF. Keep wGac's dependency snapshot deterministically
@@ -70,7 +71,6 @@ perl -pi -e 's/\r\n/\n/g' \
 mv "$DEST_DIR/Test.RemotingHelpers.h" "$DEST_TEST_DIR/"
 mv "$DEST_DIR/Test.RemotingHelpers.cpp" "$DEST_TEST_DIR/"
 
-chmod -R a-w "$DEST_DIR"
-chmod -R a-w "$DEST_TEST_DIR"
+chmod -R u+w "$DEST_DIR" "$DEST_TEST_DIR"
 
 echo "Imported GacUI dependencies and release sources from $GACUI_DIR to $DEST_DIR and $DEST_TEST_DIR"

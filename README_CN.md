@@ -62,7 +62,7 @@ wGac/
 └── test_core.sh                       全量编译并启动同级 GacUI 的 Core 侧目标
 ```
 
-运行 `./import.sh` 后，`Import/` 和 `Import-Test/` 都是只读快照；框架修复应提交到 GacUI，Wayland 兼容修复应提交到 wGac。`Import-Test/` 保存专用的中立 `Test.RemotingHelpers` 文件对；stdio 传输实现由 `Import/` 中对应的 `VlppOS.Linux.cpp` 提供。这些文件只供平台测试目标使用，不属于常规 GacUI 框架快照。`Apps/*/Resources/` 和 `Apps/*/Source/` 中的文件由 `./syncProj.sh` 同步或生成，不能直接修改。
+不能直接修改 `Import/` 和 `Import-Test/`；框架修复应提交到 GacUI，Wayland 兼容修复应提交到 wGac。这是开发行为规范；生成的文件和目录仍保留所有者写入权限。`Import-Test/` 保存专用的中立 `Test.RemotingHelpers` 文件对；stdio 传输实现由 `Import/` 中对应的 `VlppOS.Linux.cpp` 提供。这些文件只供平台测试目标使用，不属于常规 GacUI 框架快照。`Apps/*/Resources/` 和 `Apps/*/Source/` 中的文件由 `./syncProj.sh` 同步或生成，不能直接修改。
 
 ## 同步依赖
 
@@ -78,7 +78,7 @@ wGac/
 ./import.sh
 ```
 
-该脚本会重新创建 `Import/` 和 `Import-Test/`，从 `../GacUI/Import/` 和 `../GacUI/Release/` 复制常规框架文件，加入 DarkSkin 和 TuiSkin 的 Release 源码，把中立 `Test.RemotingHelpers` 文件对移动到 `Import-Test/`，并将两个快照都设为只读。导入的 `VlppOS.Linux.cpp` 提供 stdio 传输实现。
+该脚本会重新创建 `Import/` 和 `Import-Test/`，从 `../GacUI/Import/` 和 `../GacUI/Release/` 复制常规框架文件，加入 DarkSkin 和 TuiSkin 的 Release 源码，把中立 `Test.RemotingHelpers` 文件对移动到 `Import-Test/`，并保持两个快照的所有者写入权限。导入的 `VlppOS.Linux.cpp` 提供 stdio 传输实现。
 
 刷新终端控件展示、Full Control Test、Remote Protocol Test 和 Remote View Model Test：
 
