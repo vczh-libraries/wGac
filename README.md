@@ -26,6 +26,17 @@ wGac requires libdecor and a real runtime decoration plugin at startup; it stops
 
 For maintenance work, keep the GacUI, Workflow, and Tools repositories beside wGac, or run `./syncOrg.sh`. `import.sh` reads GacUI framework snapshots, and `syncProj.sh` reads GacUI test resources and builds the Workflow and GacUI generators. The sibling Release repository is not a build or import dependency.
 
+## Supported Platforms
+
+- Windows implementation is released in [the Release repo](https://github.com/vczh-libraries/Release)
+- Linux implementation is released in [the wGac repo](https://github.com/vczh-libraries/wGac)
+- macOS implementation is released in [the iGac repo](https://github.com/vczh-libraries/iGac)
+- HTML5 implementation is released in [the GacJS repo](https://github.com/vczh-libraries/GacJS)
+
+![](./Screenshots/FCT_Default.png)
+
+![](./Screenshots/TUI_SkyBlue%20(default).png)
+
 ## Project Structure
 
 ```text

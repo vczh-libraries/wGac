@@ -26,6 +26,17 @@ wGac 启动时需要 libdecor 和实际可用的运行时装饰插件；如果�
 
 维护仓库时，请将 GacUI、Workflow 和 Tools 仓库放在 wGac 的同级目录，或者运行 `./syncOrg.sh`。`import.sh` 读取 GacUI 框架快照；`syncProj.sh` 读取 GacUI 测试资源，并编译 Workflow 和 GacUI 中的代码生成器。同级的 Release 仓库不是编译或导入依赖。
 
+## 支持的平台
+
+- Windows 的实现可以在 [Release 仓库](https://github.com/vczh-libraries/Release) 找到
+- Linux 的实现可以在 [wGac 仓库](https://github.com/vczh-libraries/wGac) 找到
+- macOS 的实现可以在 [iGac 仓库](https://github.com/vczh-libraries/iGac) 找到
+- HTML5 的实现可以在 [GacJS 仓库](https://github.com/vczh-libraries/GacJS) 找到
+
+![](./Screenshots/FCT_Default.png)
+
+![](./Screenshots/TUI_SkyBlue%20(default).png)
+
 ## 项目结构
 
 ```text
