@@ -1,5 +1,6 @@
 #include "gac_include.h"
 #include "FullControlTest.h"
+#include "FullControlTestPalette.h"
 #include "../WGac/Renderers/WGacRenderer.h"
 #include "../WGac/Services/WGacAutomationService.h"
 
@@ -31,6 +32,7 @@ int main(int argc, char* argv[])
 void GuiMain()
 {
     demo::MainWindow window;
+    window.PaletteSelected.Add(&demo::OnPaletteSelected);
     window.ForceCalculateSizeImmediately();
     window.MoveToScreenCenter();
 

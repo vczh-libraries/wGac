@@ -8,7 +8,7 @@ Read these files before changing this repository:
 2. [../GacUI/.github/KnowledgeBase/Index.md](../GacUI/.github/KnowledgeBase/Index.md) for the GacUI framework knowledge base. Consult the relevant articles before changing a GacUI platform interface. In particular:
    - `KB_GacUI_Design_PlatformInitialization.md` for entry points, renderer setup, and service registration.
    - `KB_GacUI_Design_MainWindowModalWindow.md` for modal windows and hosted mode.
-   - `KB_GacUI_Manual_AutomationService.md` for automation services and IO commands.
+   - `manual/gacui/coding-agent/automation-service.md` for automation services and IO commands.
 3. [../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md](../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md) before testing the native remote renderer.
 
 `Import/GacUI.h` defines the platform abstraction interfaces. When Wayland behavior is unclear, compare the current Windows implementation in `Import/GacUI.Windows.cpp` and the Cocoa implementation in sibling `../iGac`.

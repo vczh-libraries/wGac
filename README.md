@@ -36,7 +36,7 @@ wGac/
 │   ├── Services/                      Native platform and automation services
 │   └── Wayland/                       Display, seat, and buffer integration
 ├── WGacShared/                        GacUI, wGac, and shared test libraries
-├── WGacTest/                          Hello World test app
+├── WGacTest/                          Hello World app and native service tests
 ├── WGacFullControlTest/               Full Control Test, standard or hosted
 ├── WGacTuiControlTest/                Terminal Control Showcase using TuiSkin
 ├── WGacCppTestRvm/                    Remote View Model Test client
@@ -77,7 +77,7 @@ Refresh the Terminal Control Showcase, Full Control Test, Remote Protocol Test, 
 ./syncProj.sh
 ```
 
-This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all four upstream resource trees, preserves resource-owned seed C++ files, and regenerates their x64 C++ sources under `Apps/`. It also copies the shared TUI GuiMain from `CppTest_Tui/Main.cpp` and refreshes the shared native-renderer and RVM entry points and the RVM initializer. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `Import-Test/`; neither is maintained as a local `WGacShared/Mini*.cpp` copy.
+This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all four upstream resource trees, preserves resource-owned seed C++ files, and regenerates their x64 C++ sources under `Apps/`. It also copies the shared TUI GuiMain from `CppTest_Tui/Main.cpp` and refreshes the shared native-renderer and RVM entry points, the RVM initializer, and the shared FullControlTest palette handler. The standalone showcase attaches that handler so palette changes refresh existing controls in both standard and hosted modes. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `Import-Test/`; neither is maintained as a local `WGacShared/Mini*.cpp` copy.
 
 ## Building
 
@@ -98,6 +98,14 @@ The root CMake project uses C++23 and builds:
 - `Test_CppTest_Rvm`.
 - `WGacTui` and `Test_TuiControlTest`.
 - `RemotingTest_Rendering_Wayland`.
+
+Run the native async-service regressions after building:
+
+```bash
+./build/WGacTest/bin/Test_AsyncService /C
+```
+
+These tests cover pending work during nested modal pumping and cancellation when a callback stops the service.
 
 ## Running and Automation
 

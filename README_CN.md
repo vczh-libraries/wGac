@@ -36,7 +36,7 @@ wGac/
 │   ├── Services/                      原生平台服务和自动化服务
 │   └── Wayland/                       显示、输入设备和缓冲区集成
 ├── WGacShared/                        GacUI、wGac 和共享测试库
-├── WGacTest/                          Hello World 测试应用
+├── WGacTest/                          Hello World 应用和原生服务测试
 ├── WGacFullControlTest/               标准或 Hosted 模式的 Full Control Test
 ├── WGacTuiControlTest/                使用 TuiSkin 的终端控件展示
 ├── WGacCppTestRvm/                    Remote View Model Test 客户端
@@ -77,7 +77,7 @@ wGac/
 ./syncProj.sh
 ```
 
-该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制四个上游资源目录，保留资源自带的种子 C++ 文件，并在 `Apps/` 中重新生成 x64 C++ 源码。它还会从 `CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口和 RVM 初始化文件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `Import-Test/`；二者都不再以本地 `WGacShared/Mini*.cpp` 副本维护。
+该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制四个上游资源目录，保留资源自带的种子 C++ 文件，并在 `Apps/` 中重新生成 x64 C++ 源码。它还会从 `CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口、RVM 初始化文件和共享的 FullControlTest 配色处理函数。独立展示程序连接该处理函数，使标准模式和托管模式中的配色切换都能刷新现有控件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `Import-Test/`；二者都不再以本地 `WGacShared/Mini*.cpp` 副本维护。
 
 ## 编译
 
@@ -98,6 +98,14 @@ wGac/
 - `Test_CppTest_Rvm`。
 - `WGacTui` 和 `Test_TuiControlTest`。
 - `RemotingTest_Rendering_Wayland`。
+
+编译后运行原生异步服务回归测试：
+
+```bash
+./build/WGacTest/bin/Test_AsyncService /C
+```
+
+这些测试覆盖嵌套模态消息循环中的待执行任务，以及回调停止服务时对剩余任务的取消。
 
 ## 运行和自动化
 

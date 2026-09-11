@@ -15,3 +15,6 @@ target_link_libraries(Test_HellWorld_Cpp PRIVATE
     WGac
     WGacShared
 )
+
+add_executable(Test_AsyncService "AsyncService.cpp")
+target_link_libraries(Test_AsyncService PRIVATE WGac)

@@ -225,7 +225,6 @@ void WGacAsyncService::ExecuteAsyncTasks()
             return;
         }
         CopyFrom(items, taskItems);
-        taskItems.Clear();
         for (vint i = delayItems.Count() - 1; i >= 0; i--)
         {
             Ptr<DelayItem> item = delayItems[i];
@@ -243,6 +242,16 @@ void WGacAsyncService::ExecuteAsyncTasks()
 
     for (vint i = 0; i < items.Count(); i++)
     {
+        bool pending;
+        SPIN_LOCK(taskListLock)
+        {
+            // Keep unstarted work available to a nested modal pump or Stop().
+            pending = taskItems.Remove(items[i].Obj());
+        }
+        if (!pending)
+        {
+            continue;
+        }
         try
         {
             items[i]->Execute();
@@ -251,6 +260,10 @@ void WGacAsyncService::ExecuteAsyncTasks()
         {
             for (vint j = i + 1; j < items.Count(); j++)
             {
+                SPIN_LOCK(taskListLock)
+                {
+                    taskItems.Remove(items[j].Obj());
+                }
                 items[j]->Cancel();
             }
             throw;

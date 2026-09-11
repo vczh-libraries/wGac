@@ -13,6 +13,7 @@ REMOTE_RENDERER_SOURCE="$GACUI_DIR/Test/GacUISrc/RemotingTest_Rendering_Win32/Gu
 RVM_GUI_MAIN_SOURCE="$GACUI_DIR/Test/GacUISrc/CppTest_Rvm/GuiMain.cpp"
 TUI_MAIN_SOURCE="$GACUI_DIR/Test/GacUISrc/CppTest_Tui/Main.cpp"
 RVM_INITIALIZER_DIR="$GACUI_DIR/Test/GacUISrc/Generated_RemoteViewModelTest"
+FCT_PALETTE_DIR="$GACUI_DIR/Test/GacUISrc/Generated_FullControlTest"
 TOOL_DIR=""
 
 cleanup() {
@@ -114,6 +115,8 @@ require_file "$RVM_GUI_MAIN_SOURCE"
 require_file "$TUI_MAIN_SOURCE"
 require_file "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.h"
 require_file "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.cpp"
+require_file "$FCT_PALETTE_DIR/FullControlTestPalette.h"
+require_file "$FCT_PALETTE_DIR/FullControlTestPalette.cpp"
 require_directory "$SCRIPT_DIR/RemotingTest_Rendering_Wayland"
 require_directory "$SCRIPT_DIR/WGacCppTestRvm"
 if ! command -v perl >/dev/null 2>&1; then
@@ -156,4 +159,6 @@ cp "$REMOTE_RENDERER_SOURCE" "$SCRIPT_DIR/RemotingTest_Rendering_Wayland/GuiMain
 cp "$RVM_GUI_MAIN_SOURCE" "$SCRIPT_DIR/WGacCppTestRvm/GuiMain.cpp"
 cp "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.h" "$SCRIPT_DIR/Apps/RemoteViewModelTest/Source/"
 cp "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.cpp" "$SCRIPT_DIR/Apps/RemoteViewModelTest/Source/"
+cp "$FCT_PALETTE_DIR/FullControlTestPalette.h" "$SCRIPT_DIR/Apps/FullControlTest/Source/"
+cp "$FCT_PALETTE_DIR/FullControlTestPalette.cpp" "$SCRIPT_DIR/Apps/FullControlTest/Source/"
 echo "Synchronized shared renderer and remote view-model entry points."
