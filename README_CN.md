@@ -4,8 +4,6 @@
 
 wGac 使用 Wayland、Cairo、Pango 和 XKBCommon，为 Linux Wayland 实现 GacUI 的原生平台层。
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vczh-libraries/wGac)
-
 ## 环境依赖
 
 仓库中已提交 `Import/` 和 `Apps/` 快照，因此常规编译不依赖同级源码仓库。在 Ubuntu 上，使用以下命令一次性安装系统编译依赖：
