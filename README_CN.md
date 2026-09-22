@@ -86,7 +86,7 @@ wGac/
 ./syncProj.sh
 ```
 
-该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制四个上游资源目录，保留资源自带的种子 C++ 文件，并在 `Apps/` 中重新生成 x64 C++ 源码。它还会从 `CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口、RVM 初始化文件和共享的 FullControlTest 配色处理函数。独立展示程序连接该处理函数，使标准模式和托管模式中的配色切换都能刷新现有控件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `Import-Test/`；二者都不再以本地 `WGacShared/Mini*.cpp` 副本维护。
+该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制四个上游资源目录，保留资源自带的种子 C++ 文件，并在 `Apps/` 中重新生成 x64 C++ 源码。它还会从 `CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口、RVM 初始化文件和共享的 FullControlTest 配色处理函数。RVM 入口使用的共享自动化参数头文件会复制到根目录并提交为 `SharedArguments.h`，确保全新克隆无需同级源码或临时文件即可编译。独立展示程序连接该处理函数，使标准模式和托管模式中的配色切换都能刷新现有控件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `Import-Test/`；二者都不再以本地 `WGacShared/Mini*.cpp` 副本维护。
 
 ## 编译
 

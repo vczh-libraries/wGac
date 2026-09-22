@@ -86,7 +86,7 @@ Refresh the Terminal Control Showcase, Full Control Test, Remote Protocol Test, 
 ./syncProj.sh
 ```
 
-This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all four upstream resource trees, preserves resource-owned seed C++ files, and regenerates their x64 C++ sources under `Apps/`. It also copies the shared TUI GuiMain from `CppTest_Tui/Main.cpp` and refreshes the shared native-renderer and RVM entry points, the RVM initializer, and the shared FullControlTest palette handler. The standalone showcase attaches that handler so palette changes refresh existing controls in both standard and hosted modes. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `Import-Test/`; neither is maintained as a local `WGacShared/Mini*.cpp` copy.
+This incrementally builds Workflow's `CppMerge` and GacUI's `GacGen`, copies all four upstream resource trees, preserves resource-owned seed C++ files, and regenerates their x64 C++ sources under `Apps/`. It also copies the shared TUI GuiMain from `CppTest_Tui/Main.cpp` and refreshes the shared native-renderer and RVM entry points, the RVM initializer, and the shared FullControlTest palette handler. The RVM entry point's shared automation argument header is copied to the committed root `SharedArguments.h`, so a fresh clone can build without sibling sources or temporary files. The standalone showcase attaches that handler so palette changes refresh existing controls in both standard and hosted modes. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `Import-Test/`; neither is maintained as a local `WGacShared/Mini*.cpp` copy.
 
 ## Building
 
