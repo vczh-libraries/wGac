@@ -8,6 +8,8 @@ and they must all succeed.
 
 When missing any dependencies to libraries, cmake and build scripts must be updated properly, and treat `./build.sh` as the only official verification.
 
+All build scripts and makefiles, including CMake files, must remain usable on a fresh computer with a fresh clone after installing the documented prerequisites. They must not depend on temporary folders, machine-specific paths, or artifacts left over from previous builds. Any required generated inputs must be reproducible through the documented build process.
+
 ## Before You Start
 
 Read these files before changing this repository:
@@ -29,7 +31,7 @@ Read these files before changing this repository:
 - `Apps/` is synchronized and generated from sibling GacUI resources by `./syncProj.sh`.
 - Platform code is under `WGac/`; shared test support is under `WGacShared/`.
 - On Ubuntu, run `sudo ./build-prerequisites-ubuntu.sh` to install the system build dependencies. The prerequisite script requires root but never invokes `sudo` itself, and `./build.sh` never downloads or installs dependencies.
-- If `./build.sh` fails because Ubuntu packages are missing, do not add dependency-download logic to `build.sh`. Ask the user to run `sudo ./build-prerequisites-ubuntu.sh`; if system installation is unavailable, use a disposable container or a temporary uncommitted sysroot outside the repository.
+- If `./build.sh` fails because Ubuntu packages are missing, do not add dependency-download logic to `build.sh`. Ask the user to run `sudo ./build-prerequisites-ubuntu.sh`; if system installation is unavailable, use a disposable container with the documented dependencies installed.
 - Build with `./build.sh` or clean-build with `./build.sh --rebuild`.
 - Test native apps with `./test.sh --app:simple`, `./test.sh --app:fct`, `./test.sh --app:fct --hosted`, `./test.sh --app:rvmt`, or `./test.sh --app:renderer`; use `./test_core.sh --app:fct|rpt|rvmt --protocol:minihttp` for the sibling GacUI Core-side launcher.
 - The simple, Full Control Test, and Remote View Model Test apps expose GacUI automation through MiniHTTP on port 8888.
