@@ -1365,18 +1365,8 @@ bool WGacNativeWindow::RequestClose() {
         listeners[i]->AfterClosing();
     }
 
-    auto* parent = parentWindow;
-    bool parentVisible = parent ? parent->visible : false;
-    Hide(false);
     closed = true;
-
-    if (parent && parentVisible) {
-        parent->OnFocusChanged(true);
-    }
-
-    for (vint i = 0; i < listeners.Count(); i++) {
-        listeners[i]->Closed();
-    }
+    Hide(false);
     return true;
 }
 
@@ -1398,6 +1388,7 @@ void WGacNativeWindow::Hide(bool closeWindow) {
         return;
     }
 
+    bool wasVisible = visible;
     visible = false;
 
     // Clear the focused surface and its enter serial before destroying roles.
@@ -1458,6 +1449,15 @@ void WGacNativeWindow::Hide(bool closeWindow) {
         display->Flush();
     }
 
+    // Hidden popups must leave GacUI's opening-popup list even for Hide(false).
+    if (wasVisible) {
+        if (parentWindow && parentWindow->visible) {
+            parentWindow->OnFocusChanged(true);
+        }
+        for (vint i = 0; i < listeners.Count(); i++) {
+            listeners[i]->Closed();
+        }
+    }
 }
 bool WGacNativeWindow::IsVisible() { return visible; }
 
