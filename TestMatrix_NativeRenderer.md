@@ -1,38 +1,46 @@
-# Test Matrix Card 2026-09-21T19:07:36-07:00
+# Test Matrix Card 2026-09-22T22:42:46-07:00
+
+Scope: Linux FullControlTest with the native Wayland renderer over MiniHTTP only. Other verification targets were excluded by request; their result cells remain blank. Browser, RPT, RVM, TUI, standalone FCT, unit tests and other platforms were not verified.
 
 ## Test Matrix
 
 | Test Item | 1st |
 | --- | --- |
-| [Linux][Test_CppTest_Rvm][`/MiniHttp`] | 2026-09-21T20:03:30-07:00 |
-| [Linux][`/RPT`][`/MiniHttp`] | 2026-09-21T20:15:26-07:00 |
-| [Linux][`/FCT`][`/MiniHttp`] | 2026-09-21T20:12:02-07:00 (fixed) |
-| [Linux][`/RVMT`][`/MiniHttp`] | 2026-09-21T20:04:38-07:00 |
-| [Linux][`/RVMT`][`/MiniHttp /Cli:<path>`] | 2026-09-21T20:05:54-07:00 |
-| [Linux][Import / sync / build] | 2026-09-21T19:55:54-07:00 |
-| [Linux][Hello World][local] | 2026-09-21T19:27:45-07:00 |
-| [Linux][FullControlTest][local standard] | 2026-09-21T19:58:44-07:00 (fixed) |
-| [Linux][FullControlTest][local hosted] | 2026-09-21T20:00:31-07:00 (fixed) |
-| [Linux][WGacAsyncService][unit] | 2026-09-21T19:21:13-07:00 |
+| [Linux][Test_CppTest_Rvm][`/MiniHttp`] |  |
+| [Linux][`/RPT`][`/MiniHttp`] |  |
+| [Linux][`/FCT`][`/MiniHttp`] | 2026-09-22T22:42:46-07:00 |
+| [Linux][`/RVMT`][`/MiniHttp`] |  |
+| [Linux][`/RVMT`][`/MiniHttp /Cli:<path>`] |  |
+
+## Build and Synchronization
+
+- CodePack, `import.sh`, `syncProj.sh`, `build.sh`, and the Core full build passed before verification.
+- Synchronization refreshed upstream FullControlTest Easy Layout resources and their generated C++ snapshot. No framework or platform source fix was needed.
+- Final `import.sh` and `syncProj.sh` passed. All 294 imported/generated files exactly match the snapshot used for runtime verification. Final `build.sh` passed (exit 0).
+
+Completed: 2026-09-22T23:04:13-07:00; upstream GacUI `e8be96806`.
+
+## FCT Verification
+
+All UI input used the active native renderer automation endpoint. Each result was checked in Core Controls and the active renderer DOM, resolving its element references rather than relying on the historical Elements catalog.
+
+| Check | Result |
+| --- | --- |
+| Initial UI | Passed: exact `Complete Control Showcase` title and List, Control, Misc, Window Manager tabs; no fatal state. |
+| TextList add/clear | Passed: initially empty; one Add produced 0–9 in each list; Clear removed all twenty items while both lists and action buttons remained usable. |
+| Editor typing | Passed: Search contained exactly `Wayland-MiniHTTP-22`; rich editor contained exactly `Rich22-Hello[Ab]{Cd}`. Renderer keyboard input preserved brackets and braces. |
+| Tab retention | Passed: both exact markers survived List → Control without retyping. |
+| Shortcut labels | Passed before and after replacement and takeover: `Ctrl+Q`, `Ctrl+Alt+Super+Q`, `{Ctrl+Shift+Alt+Super+Q}`; no `osSuper` placeholder. |
+| Local shortcuts | Passed on all three renderers: Ctrl+Q opened exactly `You pressed Ctrl+Q!`; Ctrl+Alt+Super+Q opened exactly `You pressed Ctrl+Alt+Win+Q!`. Each distinct dialog was dismissed and disappeared. |
+| Mouse payloads | Passed on renderer1 and replacement renderer2: Left/Middle/Right/Mouse4/Mouse5 exact down/up results and double clicks; movement; both directions of vertical/horizontal wheels. Checked no modifiers, Alt, Super, Alt+Super, and Ctrl+Shift+Alt+Super against the exact Alt/Super readout. |
+| Mouse label styling | Passed before and after mouse checks: same font and text color as shortcut labels (`Noto Sans`, 12, `#F1F1F1FF`). |
+| Renderer replacement | Passed: stopped only renderer1, kept Core alive, connected renderer2 on 8889, repeated all local shortcut and mouse checks, and confirmed both exact editor markers without retyping. |
+| Concurrent takeover | Passed: renderer3 on 8890 took over from live renderer2, retained both exact editor markers, and passed local shortcut checks. Renderer2 exited 0 and closed its 8889 listener, leaving it unable to submit stale input. |
+| Normal shutdown | Passed: renderer3 activated Exit → `self.Close() (InvokeInMainThread)`. Core and renderer3 exited 0 without fatal state or retry. No owned process or listener remained on 8888/8889/8890. |
+
+## Platform Coverage Limits
+
+- The global Ctrl+Shift+Alt+Super+Q activation is unavailable in the current wGac provider, as documented in README.md; its registration is a stub. Its displayed label was verified. This run does not claim global shortcut activation.
+- Input evidence comes from the renderer automation service, including its keyboard and mouse command paths. Physical desktop input and the browser-only bracket KeyDown values were not verified.
 
 ## Issues Found and Fix
-
-### Easy Layout selected choice is clipped
-
-Local standard FullControlTest exposes a 16-pixel-wide combo and a zero-width selected-text label. The dropdown remains operable, but its selected value is invisible. Initial evidence: `/tmp/rpxplat-easy-initial.json`. A 120-pixel minimum now preserves the selected text. Standard mode passed both arrangement directions, deferred/repeated rebuilds, six palettes, baseline editors/lists, local shortcuts and all five generated mouse buttons/modifiers.
-
-### Hidden native popup remains registered
-
-Repeated Easy Layout combo selection hides its Wayland surface, but the popup remains in the automation control tree. LLDB shows `GuiComboBoxListControl::OnListControlItemMouseDown` reaching `WGacNativeWindow::Hide(false)`; that path lacks the `Closed()` notification that removes it from GacUI’s opening-popup list. The visibility transition now delivers the notification once, including the accepted-close path. Ten consecutive open/select/dismiss cycles now remove the popup immediately. The full local baseline and queued normal close passed with exit 0.
-
-## Verification details
-
-Local standard and hosted FullControlTest passed both list panes, independent Search/document markers, Easy Layout mixed-row geometry, stored arrangement and repeated rebuilds, all palettes, retained choices/editor bindings, shortcuts, generated five-button/modifier input and queued close (exit 0). Standard mode additionally passed ten popup open/select/dismiss cycles after the visibility-notification fix. Remote FCT passed the same baseline, abrupt replacement/live takeover, retained editor/choice state, repeated shortcuts/mouse input and normal Core/renderer exit.
-
-Standalone RVM passed normal RPC, rejected a second host, and terminated nonzero with an explicit unhandled `RpcInjectedException` in both fresh host-loss variants. Native remote network/stdio RVM passed replacement/takeover and normal closure, then both exact Core-authored fatal variants with ordinary IO rejected and `!Exit` accepted. Blocked network runs recorded unread host socket bytes; blocked stdio recorded a pending requester Controls read before killing the actual child. Logs: `/tmp/rpxplat-native-rvm.log`, `/tmp/rpxplat-native-rvm-2.log`, `/tmp/rpxplat-native-rvm-3.log`, `/tmp/rpxplat-native-ui.log`. Linux global shortcuts remain unavailable; automation inputs do not establish physical hardware delivery.
-
-Native RPT additionally passed all three populated grid rows and clear, the scrolled inline document modal, replacement/takeover, repeated input checks, confirmed File-menu closure, and a fresh exact `This is a fatel error!` retained fatal state. Log: `/tmp/rpxplat-native-rpt.log`.
-
-After upstream `ae8b8504d`, CodePack and the official import/sync/full-build sequence passed. Fresh standard and hosted FCT runs passed the 120-pixel choice geometry, both arrangements, all palettes, selected-text retention, the corrected `eighteen` label and normal close (exit 0). Standard mode repeated ten popup open/select/dismiss cycles with no retained popup. The complete remote matrix above preceded this final merge; remote protocol code is unchanged and the new editor implementation is guarded for UTF-16.
-
-Final integration: GacUI `9c4491b35` includes the rebased fix and regenerated resources for both architectures. Resource compilation passed; a final CodePack run preserved every release-file hash used by the successful downstream build. All owned UI test processes and servers were closed.
