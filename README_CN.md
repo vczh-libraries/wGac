@@ -110,13 +110,15 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 - `WGacTui` 和 `Test_TuiControlTest`。
 - `RemotingTest_Rendering_Wayland`。
 
-编译后运行原生异步服务回归测试：
+编译后运行原生服务回归测试：
 
 ```bash
 ./build/WGacTest/bin/Test_AsyncService /C
+./build/WGacTest/bin/Test_ImageService /C
 ```
 
 这些测试覆盖嵌套模态消息循环中的待执行任务，以及回调停止服务时对剩余任务的取消。
+图像测试覆盖禁用状态的灰度渲染、全部 256 个 Alpha 值、透明像素合成、缓存复用，以及原始图像保持不变。禁用图像使用与 Windows 和 macOS 相同的提亮灰度转换，并保持 Alpha 不变。转换后的表面按需创建，保存在图像帧持有的 `INativeImageFrameCache` 中，由使用该帧的渲染器共享。
 
 ## 运行和自动化
 

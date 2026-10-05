@@ -70,6 +70,64 @@ static void stbi_write_callback(void* context, void* data, int size)
     vec->insert(vec->end(), bytes, bytes + size);
 }
 
+// Shared by every element using this frame; created only for the first disabled draw.
+class WGacDisabledImageFrameCache : public Object, public INativeImageFrameCache
+{
+    cairo_surface_t* disabledSurface = nullptr;
+
+public:
+    ~WGacDisabledImageFrameCache()
+    {
+        OnDetach(nullptr);
+    }
+
+    void OnAttach(INativeImageFrame* frame) override
+    {
+        auto* surface = static_cast<WGacImageFrame*>(frame)->GetSurface();
+        Size size = frame->GetSize();
+        disabledSurface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size.x, size.y);
+        if (cairo_surface_status(disabledSurface) != CAIRO_STATUS_SUCCESS) {
+            cairo_surface_destroy(disabledSurface);
+            disabledSurface = nullptr;
+            return;
+        }
+
+        cairo_surface_flush(surface);
+        cairo_surface_flush(disabledSurface);
+        const unsigned char* source = cairo_image_surface_get_data(surface);
+        unsigned char* destination = cairo_image_surface_get_data(disabledSurface);
+        int sourceStride = cairo_image_surface_get_stride(surface);
+        int destinationStride = cairo_image_surface_get_stride(disabledSurface);
+
+        for (vint y = 0; y < size.y; y++) {
+            const auto* sourceRow = reinterpret_cast<const uint32_t*>(source + y * sourceStride);
+            auto* destinationRow = reinterpret_cast<uint32_t*>(destination + y * destinationStride);
+            for (vint x = 0; x < size.x; x++) {
+                uint32_t pixel = sourceRow[x];
+                uint32_t a = pixel >> 24;
+                uint32_t r = (pixel >> 16) & 0xFF;
+                uint32_t g = (pixel >> 8) & 0xFF;
+                uint32_t b = pixel & 0xFF;
+
+                // Match Windows and Cocoa using premultiplied RGB; preserve alpha exactly.
+                uint32_t gray = (r + g + b) / 6 + a / 2;
+                destinationRow[x] = (pixel & 0xFF000000) | (gray << 16) | (gray << 8) | gray;
+            }
+        }
+        cairo_surface_mark_dirty(disabledSurface);
+    }
+
+    void OnDetach(INativeImageFrame*) override
+    {
+        if (disabledSurface) {
+            cairo_surface_destroy(disabledSurface);
+            disabledSurface = nullptr;
+        }
+    }
+
+    cairo_surface_t* GetSurface() { return disabledSurface; }
+};
+
 // WGacImageFrame implementation
 WGacImageFrame::WGacImageFrame(INativeImage* _image, cairo_surface_t* _surface)
     : image(_image)
@@ -85,9 +143,25 @@ WGacImageFrame::WGacImageFrame(INativeImage* _image, cairo_surface_t* _surface)
 
 WGacImageFrame::~WGacImageFrame()
 {
+    for (vint i = 0; i < caches.Count(); i++) {
+        caches.Values()[i]->OnDetach(this);
+    }
     if (surface) {
         cairo_surface_destroy(surface);
     }
+}
+
+cairo_surface_t* WGacImageFrame::GetSurface(bool enabled)
+{
+    if (enabled || !surface) return surface;
+
+    static char disabledCacheKey;
+    auto cache = GetCache(&disabledCacheKey).Cast<WGacDisabledImageFrameCache>();
+    if (!cache) {
+        cache = Ptr(new WGacDisabledImageFrameCache);
+        SetCache(&disabledCacheKey, cache);
+    }
+    return cache->GetSurface();
 }
 
 INativeImage* WGacImageFrame::GetImage()
@@ -106,6 +180,7 @@ bool WGacImageFrame::SetCache(void* key, Ptr<INativeImageFrameCache> cache)
         return false;
     }
     caches.Add(key, cache);
+    cache->OnAttach(this);
     return true;
 }
 
@@ -123,6 +198,7 @@ Ptr<INativeImageFrameCache> WGacImageFrame::RemoveCache(void* key)
     vint index = caches.Keys().IndexOf(key);
     if (index != -1) {
         Ptr<INativeImageFrameCache> cache = caches.Values()[index];
+        cache->OnDetach(this);
         caches.Remove(key);
         return cache;
     }

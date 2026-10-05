@@ -26,7 +26,7 @@ public:
     Ptr<INativeImageFrameCache> GetCache(void* key) override;
     Ptr<INativeImageFrameCache> RemoveCache(void* key) override;
 
-    cairo_surface_t* GetSurface() { return surface; }
+    cairo_surface_t* GetSurface(bool enabled = true);
 };
 
 class WGacImage : public Object, public INativeImage

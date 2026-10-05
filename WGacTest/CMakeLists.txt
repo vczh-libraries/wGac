@@ -18,3 +18,6 @@ target_link_libraries(Test_HellWorld_Cpp PRIVATE
 
 add_executable(Test_AsyncService "AsyncService.cpp")
 target_link_libraries(Test_AsyncService PRIVATE WGac)
+
+add_executable(Test_ImageService "ImageService.cpp")
+target_link_libraries(Test_ImageService PRIVATE WGac)

@@ -110,13 +110,15 @@ The root CMake project uses C++23 and builds:
 - `WGacTui` and `Test_TuiControlTest`.
 - `RemotingTest_Rendering_Wayland`.
 
-Run the native async-service regressions after building:
+Run the native service regressions after building:
 
 ```bash
 ./build/WGacTest/bin/Test_AsyncService /C
+./build/WGacTest/bin/Test_ImageService /C
 ```
 
 These tests cover pending work during nested modal pumping and cancellation when a callback stops the service.
+Image tests cover disabled grayscale rendering, all 256 alpha values, transparent compositing, cache reuse, and preservation of the original image. Disabled images use the same lightened grayscale conversion as Windows and macOS, with unchanged alpha. The converted surface is created on demand in an `INativeImageFrameCache` owned by the frame and shared by its renderers.
 
 ## Running and Automation
 

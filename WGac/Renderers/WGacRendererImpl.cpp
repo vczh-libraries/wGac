@@ -1827,7 +1827,7 @@ public:
         auto* wgacFrame = dynamic_cast<wayland::WGacImageFrame*>(frame);
         if (!wgacFrame) return;
 
-        cairo_surface_t* surface = wgacFrame->GetSurface();
+        cairo_surface_t* surface = wgacFrame->GetSurface(element->GetEnabled());
         if (!surface) return;
 
         Size imageSize = frame->GetSize();
@@ -1881,13 +1881,6 @@ public:
         }
 
         cairo_paint(cr);
-
-        // If disabled, apply a gray overlay
-        if (!element->GetEnabled()) {
-            cairo_set_source_rgba(cr, 1, 1, 1, 0.5);
-            cairo_rectangle(cr, x, y, w, h);
-            cairo_fill(cr);
-        }
 
         cairo_restore(cr);
     }
