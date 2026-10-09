@@ -28,7 +28,7 @@ Read these files before changing this repository:
 - This is the Wayland implementation of GacUI.
 - `Import/` is assembled from sibling `../GacUI/Import/` and `../GacUI/Release/` by `./import.sh`.
 - `Import-Test/` contains the test-only `Test.RemotingHelpers` amalgamation assembled by `./import.sh`.
-- `Apps/` is synchronized and generated from sibling GacUI resources by `./syncProj.sh`.
+- `<wGac repo>/syncProj.sh` incrementally builds Workflow's `CppMerge` and GacUI's `GacGen` and `GacBuild`, copies the four upstream resource trees, and merges x32/x64 C++ into `<wGac repo>/Apps/*/Source/`.
 - Platform code is under `WGac/`; shared test support is under `WGacShared/`.
 - On Ubuntu, run `sudo ./build-prerequisites-ubuntu.sh` to install the system build dependencies. The prerequisite script requires root but never invokes `sudo` itself, and `./build.sh` never downloads or installs dependencies.
 - If `./build.sh` fails because Ubuntu packages are missing, do not add dependency-download logic to `build.sh`. Ask the user to run `sudo ./build-prerequisites-ubuntu.sh`; if system installation is unavailable, use a disposable container with the documented dependencies installed.
@@ -45,6 +45,10 @@ Read these files before changing this repository:
 - Never edit `Apps/*/Resources/` or `Apps/*/Source/` directly. Change the owning GacUI resource and rerun `./syncProj.sh`.
 - Generated reflection sources are retained but excluded from test targets, which compile with `VCZH_DEBUG_NO_REFLECTION`.
 - Do not edit build output under `build/`.
+
+Synchronization invokes GacBuild in GacGen mode with explicit absolute GacGen and CppMerge paths. Keep the temporary GacGen symlink unresolved: its adjacent `Metadata.txt` selects full `Reflection32.bin` and `Reflection64.bin` from `<GacUI repo>/Test/Resources/Metadata/`, including generated dialog types absent from the normal core-only metadata.
+
+GacBuild runs `/P32` and `/P64`, validates both staging trees, and merges matching files with CppMerge while preserving upstream seed `USER_CONTENT`, embedded resources and `RemoteViewModelTestRpc.h/.cpp`. Keep generated reflection files and the existing target exclusions. Retain `<wGac repo>/Apps/*/Resources/GacBuild.log` and `<wGac repo>/Apps/*/Resources/Resource.xml.log/{x32,x64}/` for diagnostics, including compiler logs, staged C++/RPC files and `Deploy.xml`. These artifacts are ignored by Git. A compiler, artifact, merge or deployment failure must stop synchronization with nonzero status.
 
 The files under `WGac/Protocol/` are committed `wayland-scanner` outputs. Normal builds consume them without regenerating them. With `wayland-scanner`, `pkg-config`, and `wayland-protocols` installed, run these commands from the repository root to refresh all three client protocols:
 

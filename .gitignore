@@ -7,3 +7,5 @@ CMakeFiles/
 Makefile
 cmake_install.cmake
 .syncProj.*/
+/Apps/*/Resources/Resource.xml.log/
+/Apps/*/Resources/GacBuild.log

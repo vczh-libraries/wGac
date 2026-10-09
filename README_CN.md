@@ -86,7 +86,13 @@ wGac/
 ./syncProj.sh
 ```
 
-该脚本增量编译 Workflow 的 `CppMerge` 和 GacUI 的 `GacGen`，复制四个上游资源目录，保留资源自带的种子 C++ 文件，并在 `Apps/` 中重新生成 x64 C++ 源码。它还会从 `CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口、RVM 初始化文件和共享的 FullControlTest 配色处理函数。RVM 入口使用的共享自动化参数头文件会复制到根目录并提交为 `SharedArguments.h`，确保全新克隆无需同级源码或临时文件即可编译。独立展示程序连接该处理函数，使标准模式和托管模式中的配色切换都能刷新现有控件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `Import-Test/`；二者都不再以本地 `WGacShared/Mini*.cpp` 副本维护。
+该脚本通过现有的原生编译辅助脚本，增量编译 `<Workflow repo>/Tools/CppMerge`、`<GacUI repo>/Tools/GacGen` 和 `<GacUI repo>/Tools/GacBuild`。它复制四个上游资源目录及其种子 C++ 文件，然后针对每个资源以 GacGen 模式调用 GacBuild。GacGen 通过 `/P32` 和 `/P64` 暂存两种架构的输出；GacBuild 验证两份输出，并调用 CppMerge 将对应文件合并到 `<wGac repo>/Apps/*/Source/`。合并保留上游种子的 `USER_CONTENT`、嵌入式资源和 `RemoteViewModelTestRpc.h/.cpp`。生成的反射文件继续保留，并继续从使用 `VCZH_DEBUG_NO_REFLECTION` 的编译目标中排除。
+
+脚本向 GacBuild 显式传入 GacGen 和 CppMerge 的绝对路径。GacGen 使用临时符号链接路径，不能将其解析为真实可执行文件路径，否则会改变元数据查找位置。链接旁的 `Metadata.txt` 选择 `<GacUI repo>/Test/Resources/Metadata/` 中的完整 `Reflection32.bin` 和 `Reflection64.bin`，其中包含开发工具通常使用的核心元数据所缺少的生成对话框类型。维护依赖同级 Workflow 和 GacUI 仓库，不需要 Release 仓库。
+
+可检查 `<wGac repo>/Apps/*/Resources/GacBuild.log` 和 `<wGac repo>/Apps/*/Resources/Resource.xml.log/{x32,x64}/`，查看编排及编译诊断、暂存的 C++/RPC 文件、二进制缓存和 `Deploy.xml` 部署清单。成功或失败后都保留已产生的暂存文件，并由 Git 忽略；下次同步会重新复制资源目录。生成失败、必要文件缺失、合并失败或部署失败都会以非零状态终止同步。
+
+脚本还会从 `<GacUI repo>/Test/GacUISrc/CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口、RVM 初始化文件和共享的 FullControlTest 配色处理函数。RVM 入口使用的共享自动化参数头文件会复制到根目录并提交为 `<wGac repo>/SharedArguments.h`，确保全新克隆无需同级源码或临时文件即可编译。独立展示程序连接该处理函数，使标准模式和托管模式中的配色切换都能刷新现有控件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `<wGac repo>/Import-Test/`；二者都不再以本地 `<wGac repo>/WGacShared/Mini*.cpp` 副本维护。
 
 ## 编译
 
