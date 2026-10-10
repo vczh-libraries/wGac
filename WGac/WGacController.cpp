@@ -43,7 +43,7 @@ public:
     WGacController()
         : mainWindow(nullptr)
         , applicationId(AString::Unmanaged("gacui"))
-        , inputService(&GlobalTimerFunc)
+        , inputService(&GlobalTimerFunc, [this](vint id) { callbackService.InvokeGlobalShortcutKeyActivated(id); })
         , display(nullptr)
         , running(false)
         , finalizing(false)
@@ -129,6 +129,7 @@ public:
 
     void InvokeGlobalTimer()
     {
+        inputService.PumpEvents();
         asyncService.ExecuteAsyncTasks();
         callbackService.InvokeGlobalTimer();
     }

@@ -37,7 +37,8 @@ namespace vl::presentation::wayland
 	class TuiWGacInputService : public WGacInputService
 	{
 	public:
-		TuiWGacInputService() : WGacInputService(nullptr) {}
+		TuiWGacInputService(const Func<void(vint)>& shortcutActivated)
+			: WGacInputService(nullptr, shortcutActivated) {}
 
 		void StartTimer() override
 		{
@@ -62,12 +63,14 @@ namespace vl::presentation::wayland
 
 		void PumpPlatformEvents() override
 		{
+			inputService.PumpEvents();
 			if (clipboardService.PumpEvents()) ClipboardUpdated();
 		}
 
 	public:
 		TuiWGacController(const TuiConfiguration& configuration)
 			: TuiControllerBase(configuration)
+			, inputService([this](vint id) { GlobalShortcutKeyActivated(id); })
 		{
 		}
 

@@ -14,7 +14,7 @@ sudo ./build-prerequisites-ubuntu.sh
 
 该脚本要求 root 权限，但绝不会自行调用 `sudo`。它使用 `apt-get` 更新 apt 元数据，并安装编译器、CMake、`pkg-config`、所需的开发包以及 libdecor GTK 运行时插件。如果需要审查对系统的修改，请在运行前阅读脚本。在 Debian 或其他 Linux 发行版上，请使用该发行版的软件包管理器安装对应软件包。
 
-保留的 `WGacDialogService` 实现依赖 GIO，但当前 Wayland 应用会选择 `FakeDialogService`，无需安装桌面 Portal 后端。
+保留的 `WGacDialogService` 实现依赖 GIO，但当前 Wayland 应用会选择 `FakeDialogService`。全局快捷键通过 GIO 使用桌面的 GlobalShortcuts Portal 后端；普通应用对话框不依赖 Portal。
 
 `./build.sh` 只配置并编译项目，绝不会下载或安装依赖。如果 CMake 在 Ubuntu 上报告缺少编译器、`pkg-config` 或开发模块，请运行 `sudo ./build-prerequisites-ubuntu.sh`，然后重试 `./build.sh`。
 
@@ -131,10 +131,12 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 ```bash
 ./build/WGacTest/bin/Test_AsyncService /C
 ./build/WGacTest/bin/Test_ImageService /C
+./build/WGacTest/bin/Test_GlobalShortcuts /C
 ```
 
 这些测试覆盖嵌套模态消息循环中的待执行任务，以及回调停止服务时对剩余任务的取消。
 图像测试覆盖禁用状态的灰度渲染、全部 256 个 Alpha 值、透明像素合成、缓存复用，以及原始图像保持不变。禁用图像使用与 Windows 和 macOS 相同的提亮灰度转换，并保持 Alpha 不变。转换后的表面按需创建，保存在图像帧持有的 `INativeImageFrameCache` 中，由使用该帧的渲染器共享。
+全局快捷键测试使用隔离的 D-Bus 会话（依赖安装脚本包含 `dbus-daemon`）和模拟 Portal，覆盖应用注册、提前到达的响应、修饰键编码、多快捷键、UI 线程触发、重复或无效注册、拒绝、取消和注销。测试不会授予桌面权限，也不能代替真实桌面验证。
 
 ## 运行和自动化
 
@@ -231,15 +233,30 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 - libdecor 没有设置平台边框窗口图标的 API，因此不支持 `IconVisible`，其 getter 始终返回 `false`。
 - libdecor 无法单独隐藏最大化控件。最大化操作入口由 `SizeBox`（边框的缩放能力）决定；`MaximizedBox` 会保留并返回请求值，但无法突破这一平台限制。
 
-### 全局快捷键
+## 全局快捷键
 
-wGac 尚未实现全局快捷键。在运行 `./test.sh --app:fct` 时，**Ctrl+Shift+Alt+Super+Q** 不会生效；TUI 展示程序的全局快捷键 **Ctrl+Alt+Super+Shift+F8** 也不可用。
+wGac 通过 [GlobalShortcuts Portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.GlobalShortcuts.html) 注册全局快捷键。原生及 Hosted Full Control Test 使用 **Ctrl+Shift+Alt+Super+Q**；TUI 展示程序使用 **Ctrl+Alt+Super+Shift+F8**。原生远程渲染器会将 Portal 触发事件转发给 Core。其他应用获得焦点时，这些快捷键仍然可以生效。
 
-GNOME 从 [GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts) 开始支持 GlobalShortcuts 桌面 Portal。对于只使用 Ubuntu LTS 版本的用户，[Ubuntu 26.04 LTS 搭载 GNOME 50](https://documentation.ubuntu.com/release-notes/26.04/changes-since-previous-interim/#gnome-50)，提供了这一桌面支持。GNOME 48 和 49 也支持该 Portal，因此最低要求并非 GNOME 50。升级仅提供桌面端能力；wGac 仍需实现通过 Portal 注册快捷键及处理触发事件，原生应用和 TUI 应用的全局快捷键才能生效。
+GNOME 从 [GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts) 开始支持该 Portal，包括 Ubuntu 26.04 LTS 的 GNOME 50。wGac 在运行时检测 Portal，不根据 Ubuntu 版本判断支持情况。Portal 缺失或按键不受支持时返回 `NotSupported`。用户授权及最终桌面绑定是异步的：返回的注册 ID 只表示已保留请求，授权后才能触发；桌面也可以更改请求的组合键。取消或拒绝授权会使该注册保持未激活状态。
 
-## 缺陷
+`<wGac repo>/test.sh` 会在当前用户的 XDG 应用目录中创建隐藏的 desktop 文件，并将 `WGAC_APPLICATION_ID` 设置为 `org.gaclib.wGac.<app>`。通过 [Registry Portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.host.portal.Registry.html)，从终端启动的测试程序也能提供所需的应用身份。各测试应用分别授权。其他从终端启动的应用应安装自己的对应 desktop 文件并设置该变量；已有桌面或沙盒身份的应用可以不设置，由 Portal 自动识别。
 
-- Wayland 原生渲染器在拖动主窗口标题栏时存在问题：窗口的左上角总是与鼠标指针对齐，这与 Wayland 原生应用的行为不一致。
+首次注册时，GNOME 可能在 GacUI 外显示 **Add Keyboard Shortcuts**。请批准所需快捷键，然后在其他窗口获得焦点时测试。这个桌面授权对话框不属于 `FakeDialogService`，也不会出现在 MiniHTTP 控件树中。注销快捷键会取消待完成的 Portal 请求并关闭会话；进程退出会释放全部会话。GNOME 50 可能在请求取消后仍保留授权窗口，请使用 **Cancel** 关闭这个过期窗口。Portal 重启后，请重启应用以重新注册。
+
+### Ubuntu 26.04 复查
+
+在 Ubuntu 26.04.1 / GNOME Shell 50.1 上复查后，**新增可用功能为一项：全局快捷键**，由原生、Hosted、TUI 和远程渲染器共用。其他已记录限制仍然存在：
+
+| 功能 | Ubuntu 26.04 结果 |
+| --- | --- |
+| GNOME Terminal 的本地 Super 快捷键 | VTE 0.84.0 仍丢弃 Super；请使用 Kitty 等兼容终端。 |
+| SGR 鼠标 Super / 单按 Alt 显示提示 | 终端协议及所请求键盘模式的限制不变。 |
+| 原生消息、颜色及字体对话框 | `WGacDialogService` 仍未实现；应用对话框继续使用 `FakeDialogService`。已有的 FileChooser Portal 不计为新功能。 |
+| 普通 Wayland 窗口的全局定位 | 仍由合成器控制；较新的拖动协议不提供任意定位。 |
+| 平台边框图标 / 独立最大化按钮 | libdecor 0.2.5 仍没有对应 API。 |
+| TUI locale 及外部富文本剪贴板 | 属于现有 provider 限制，桌面升级不会实现这些路径。 |
+
+此前列出的标题栏拖动缺陷已无法复现：通过合成器发送输入拖动原生远程渲染器时，鼠标相对窗口左上角的偏移保持不变。wGac 的 `96ec017` 提交已经实现合成器移动路径，因此这里只修正历史记录，不将其计为 Ubuntu 26.04 新增功能。构建及真实桌面测试结果请参阅[验证记录](TestMatrix_Tui.md#ubuntu-2604-review-2026-10-09)。
 
 ## 终端控件展示
 
@@ -255,7 +272,7 @@ TUI provider 在启动工作线程前根据环境初始化 `LC_CTYPE`，以支�
 
 ### 终端输入限制
 
-本地快捷键 **Ctrl+Alt+Super+Q** 要求终端将 Super 与 Alt 分别上报。GNOME Terminal 3.52.0 / VTE 0.76.0 会丢弃 Super，发送与 Ctrl+Alt+Q 相同的字节。限制发生在终端编码输入时：GNOME/Wayland 会将 Super 传递给获得焦点的终端，但 TUI 进程只能收到终端输出的字节。原生 Wayland 渲染器则直接接收属于其自身焦点窗口的修饰键状态。
+本地快捷键 **Ctrl+Alt+Super+Q** 要求终端将 Super 与 Alt 分别上报。GNOME Terminal 3.52.0 / VTE 0.76.0 会丢弃 Super，发送与 Ctrl+Alt+Q 相同的字节。Ubuntu 26.04.1 的 GNOME Terminal 3.58.0 / VTE 0.84.0 仍然如此：通过合成器生成输入时，两种组合键均产生 `1b 11`。限制发生在终端编码输入时：GNOME/Wayland 会将 Super 传递给获得焦点的终端，但 TUI 进程只能收到终端输出的字节。原生 Wayland 渲染器则直接接收属于其自身焦点窗口的修饰键状态。
 
 请使用 [Kitty](https://sw.kovidgoyal.net/kitty/) 运行本地 Super 快捷键。可以将 Kitty 与 GNOME Terminal 同时安装，打开 Kitty 窗口后，在 `wGac` 目录运行现有应用：
 
@@ -265,8 +282,8 @@ TUI provider 在启动工作线程前根据环境初始化 `LC_CTYPE`，以支�
 
 VlppOS 会自动启用 Kitty 键盘协议并解析 Super；无需修改应用代码、升级桌面或特别配置键盘协议。[Linux 验证记录](TestMatrix_Tui.md)已确认，在 GNOME Wayland/XWayland 下使用 Kitty 0.32.2 时，左右两个 Super 键均可触发 Ctrl+Alt+Super+Q。
 
-使用 Kitty 后仍有以下限制：
+桌面快捷键与剩余终端限制独立于 Kitty 的本地 Super 支持：
 
-- **Ctrl+Alt+Super+Shift+F8** 是全局快捷键，没有本地按键回退路径。wGac 的全局注册目前仅为占位实现，因此即使终端正确上报 Super，该命令仍需要单独实现。桌面环境要求请参阅[全局快捷键](#全局快捷键)。
+- **Ctrl+Alt+Super+Shift+F8** 是全局快捷键，没有本地按键回退路径。它独立于终端键盘编码使用桌面 Portal，因此授权后在 GNOME Terminal 中也能生效。桌面环境要求请参阅[全局快捷键](#全局快捷键)。
 - 标准 SGR 鼠标报告没有 Super 位，因此鼠标 `osSuper` 保持为 false。旧终端的 Meta 仍映射为 Alt。
 - 当前请求的键盘模式不单独上报修饰键，因此不能通过单按 Alt 显示访问键提示；仍可使用鼠标和方向键操作菜单。

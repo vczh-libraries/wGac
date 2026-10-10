@@ -24,6 +24,7 @@ PACKAGES=(
     clang
     cmake
     pkg-config
+    dbus-daemon
     libwayland-dev
     libxkbcommon-dev
     libx11-dev

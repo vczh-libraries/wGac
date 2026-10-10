@@ -110,6 +110,28 @@ if [[ ! -x "$APP" ]]; then
     exit 1
 fi
 
+# The GlobalShortcuts portal requires an installed desktop identity even when
+# a development app starts from a terminal. Keep separate consent per test app.
+export WGAC_APPLICATION_ID="org.gaclib.wGac.$APP_NAME"
+WGAC_DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+mkdir -p "$WGAC_DESKTOP_DIR"
+WGAC_DESKTOP_EXEC="$APP"
+WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\\/\\\\}"
+WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\"/\\\"}"
+WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\$/\\\$}"
+WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\`/\\\`}"
+WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//%/%%}"
+# Desktop entry strings have an additional backslash-unescaping layer.
+WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\\/\\\\}"
+cat > "$WGAC_DESKTOP_DIR/$WGAC_APPLICATION_ID.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=wGac $APP_NAME
+Exec="$WGAC_DESKTOP_EXEC"
+NoDisplay=true
+Terminal=$([[ "$APP_NAME" == "tui" ]] && echo true || echo false)
+EOF
+
 if [[ "$UNBLOCK" -eq 1 ]]; then
     if [[ "$HOSTED" -eq 1 ]]; then
         "$APP" --hosted &

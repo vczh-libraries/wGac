@@ -62,3 +62,24 @@ The owned test apps, terminal windows, browser, website server and clipboard hel
 After upstream `ae8b8504d`, fresh TUI verification passed the corrected RepeatFlow label and supplementary-character paste/copy/undo/redo in all four editor tabs. The six direct/queued Hide/Close/Stop cases were repeated on the refreshed build; every app exited 0 and its complete child PTY state matched the pre-exec state, captured before outer-wrapper restoration. Logs: `/tmp/rpxplat-rebase-tui.log` and `/tmp/rpxplat-rebase-tui-exits.log`. The expanded provider cases cover empty, short, CJK and long captions with both resize-frame settings.
 
 Final integration: GacUI `9c4491b35` includes the rebased fix and regenerated resources for both architectures. Resource compilation passed; a final CodePack run preserved every release-file hash used by the successful downstream build. All owned UI test processes and servers were closed.
+
+## Ubuntu 26.04 review (2026-10-09)
+
+This targeted follow-up supersedes the historical claim that wGac global shortcuts are unavailable. It does not repeat the full September showcase matrix.
+
+| Check | Result |
+| --- | --- |
+| Desktop | Ubuntu 26.04.1, GNOME Shell 50.1, GNOME Terminal 3.58.0 / VTE 0.84.0, xdg-desktop-portal 1.21.1, GNOME portal 50.0 and libdecor 0.2.5. GlobalShortcuts interface version 1 is present. |
+| Official build | `./import.sh`, `./syncProj.sh` and `./build.sh --rebuild` passed in order. The upgrade had removed host development packages; the clean build used a disposable Ubuntu 26.04.1 container with the repository's prerequisite script. Built applications and service tests ran on the actual host desktop. Generated imports and app sources remained unchanged. |
+| Service regressions | GlobalShortcuts 3/3, AsyncService 2/2 and ImageService 2/2 passed. The isolated mock portal covers registration identity, early responses, multiple bindings, UI-thread activation, sender/ID filtering, duplicate and invalid keys, denial, pending cancellation and removal. |
+| Native and hosted FCT | Both modes show exactly `You pressed Ctrl+Shift+Alt+Win+Q!` after desktop consent and compositor-delivered Ctrl+Shift+Alt+Super+Q while a separate terminal has focus. Normal close exits 0. |
+| TUI global shortcut | GNOME Terminal at 120x40 shows exactly `You pressed Ctrl+Shift+Alt+Win+F8!` after portal approval and compositor-delivered Ctrl+Shift+Alt+Super+F8 while another terminal has focus. The dialog dismisses and the normal `self.Close()` path exits 0. This does not depend on local terminal Super encoding. |
+| GNOME Terminal local Super | Ctrl+Alt+Q and Ctrl+Alt+Super+Q both emit `1b 11`, including after requesting the keyboard disambiguation mode. Local Super remains unavailable in this terminal. Input was compositor-generated, not human physical input. |
+| Remote RPT and FCT | Real global Q activation passes while another app has focus, including replacement and takeover. RPT retains `You have clicked!`; FCT retains added list items. Superseded renderers exit 0 on takeover. Core and final renderer both exit 0 through application close. FCT local Ctrl+Q and Ctrl+Alt+Super+Q also pass after takeover. |
+| Remote view model | The standalone RVMT app with the MiniHTTP RvmHost shows exactly `Hello, Ubuntu2604!` after typing through its local automation IO, then closes with exit 0. |
+| Title dragging | Raw FCT renderer: pointer starts 164 by 16 pixels from the window corner; a 100 by 80 drag moves the actual compositor window from (736,334) to (836,414), preserving that offset. The existing `96ec017` implementation handles the move; the old README bug note was stale. |
+| Other restrictions | libdecor icon/independent maximize controls, arbitrary Wayland positioning, native message/color/font dialogs and documented TUI protocol/locale/clipboard limits remain. Only global shortcuts count as newly enabled functionality. |
+
+An initial FCT replacement attempt stopped its renderer before a queued modal close completed; activating another shortcut while that dialog remained open hit Core's disabled-owner guard. The successful rerun explicitly checked dialog disappearance before every further activation and replacement. Alt+Tab can also leave access-key overlays visible; Escape dismisses them before local shortcut checks.
+
+GNOME 50 can leave a consent window visible after a pending request is canceled. The application closes its portal request/session; any stale desktop consent window was dismissed with Cancel. All owned apps, cores, renderers, RVM hosts, focus terminals and consent windows were closed after verification.

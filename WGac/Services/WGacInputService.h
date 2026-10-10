@@ -2,10 +2,13 @@
 #define WGAC_INPUTSERVICE_H
 
 #include "GacUI.h"
+#include <memory>
 
 namespace vl {
 namespace presentation {
 namespace wayland {
+
+class WGacGlobalShortcutService;
 
 class WGacInputService : public Object, public INativeInputService
 {
@@ -14,12 +17,16 @@ class WGacInputService : public Object, public INativeInputService
 protected:
     TimerFunc timer;
     bool isTimerEnabled;
-    int usedHotKeys;
+    vint usedHotKeys;
     collections::Dictionary<WString, VKEY> keys;
     collections::Array<WString> keyNames;
+    std::unique_ptr<WGacGlobalShortcutService> globalShortcuts;
 
 public:
-    WGacInputService(TimerFunc timer);
+    WGacInputService(TimerFunc timer, const Func<void(vint)>& shortcutActivated = {});
+    ~WGacInputService();
+
+    void PumpEvents();
 
     void StartTimer() override;
     void StopTimer() override;

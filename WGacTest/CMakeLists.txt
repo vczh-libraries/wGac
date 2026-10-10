@@ -21,3 +21,6 @@ target_link_libraries(Test_AsyncService PRIVATE WGac)
 
 add_executable(Test_ImageService "ImageService.cpp")
 target_link_libraries(Test_ImageService PRIVATE WGac)
+
+add_executable(Test_GlobalShortcuts "GlobalShortcuts.cpp")
+target_link_libraries(Test_GlobalShortcuts PRIVATE WGac)
