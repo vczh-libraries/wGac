@@ -1078,19 +1078,25 @@ public:
 
     RenderTargetFailure StopRenderingOnNativeWindow() override
     {
+        bool resizedWhileRendering = false;
         cairo_t* cr = GetCairoContext();
         if (cr) {
             cairo_restore(cr);
         }
         if (view && view->IsRendering()) {
+            auto* buffer = view->GetCurrentBuffer();
+            resizedWhileRendering =
+                buffer->GetWidth() != static_cast<uint32_t>(view->GetWidth()) ||
+                buffer->GetHeight() != static_cast<uint32_t>(view->GetHeight());
             view->StopRendering();
-            // Commit the buffer to Wayland surface after rendering
-            if (window) {
+            // A layout change can resize the pool during this draw. Retry with
+            // the new buffers instead of submitting the obsolete-sized frame.
+            if (window && !resizedWhileRendering) {
                 window->CommitBuffer();
             }
         }
         SetCurrentRenderTarget(nullptr);
-        bool moved = movedWhileRendering;
+        bool moved = movedWhileRendering || resizedWhileRendering;
         movedWhileRendering = false;
         return moved ? RenderTargetFailure::ResizeWhileRendering : RenderTargetFailure::None;
     }

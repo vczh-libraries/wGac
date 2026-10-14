@@ -91,6 +91,8 @@ wGac/
 
 `GacBuild.sh` 在同级 GacUI 和 Workflow 仓库中定位三个可执行文件，并向 GacBuild 显式传入 GacGen 和 CppMerge 的绝对路径。GacGen 使用临时符号链接路径，不能将其解析为真实可执行文件路径，否则会改变元数据查找位置。链接旁的 `Metadata.txt` 选择 `<GacUI repo>/Test/Resources/Metadata/` 中的完整 `Reflection32.bin` 和 `Reflection64.bin`，其中包含开发工具通常使用的核心元数据所缺少的生成对话框类型。包装脚本在成功或失败后都会删除临时入口，并返回原生工具的退出状态。维护依赖同级 Workflow 和 GacUI 仓库，不需要 Release 仓库。
 
+同步时会把导入的皮肤头文件加入各展示程序生成的 C++ 包含列表：TuiControlTest 使用 TuiSkin，FullControlTest 使用 DarkSkin。FullControlTest 的纵向选项卡栏直接使用 DarkSkin 的模板和配色值。
+
 `syncProj.sh` 编译工具后，也可以直接使用包装脚本：
 
 ```bash
@@ -132,7 +134,10 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 ./build/WGacTest/bin/Test_AsyncService /C
 ./build/WGacTest/bin/Test_ImageService /C
 ./build/WGacTest/bin/Test_GlobalShortcuts /C
+./build/WGacTest/bin/Test_RenderingLifecycle /C
 ```
+
+`Test_RenderingLifecycle` 需要可用的 Wayland 显示连接。它验证绘制期间改变尺寸会保留正在使用的 Cairo 缓冲区，并且下一次绘制使用调整后的缓冲池。原生渲染会丢弃尺寸已过时的帧，并要求 GacUI 重新绘制。
 
 这些测试覆盖嵌套模态消息循环中的待执行任务，以及回调停止服务时对剩余任务的取消。
 图像测试覆盖禁用状态的灰度渲染、全部 256 个 Alpha 值、透明像素合成、缓存复用，以及原始图像保持不变。禁用图像使用与 Windows 和 macOS 相同的提亮灰度转换，并保持 Alpha 不变。转换后的表面按需创建，保存在图像帧持有的 `INativeImageFrameCache` 中，由使用该帧的渲染器共享。
@@ -267,6 +272,8 @@ GNOME 从 [GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts) 
 TUI 剪贴板使用 X11 selection（编译依赖包括 `libx11-dev`、`libxfixes-dev`）。在 Wayland 桌面中，XWayland 负责与其他桌面应用互通，请保留 `DISPLAY`。没有 X display 时，剪贴板对象仅在进程内共享。外部传输为 UTF-8 文本，富文档和图像对象只在应用内保留。XFixes 所有权通知会更新依赖剪贴板状态的命令。其他客户端读取 selection 时，本应用必须仍在运行。支持接收增量 selection；发送文本的大小不能超过 X 服务器的最大请求长度。
 
 正常 Hide、Close 和 Stop 会恢复终端输入输出模式；关闭终端标签页不能替代正常退出测试。
+
+TUI 不向控制台输出 Portal 服务诊断，避免全局快捷键请求被拒绝或失败时滚动并破坏正在显示的界面。原生应用仍保留这些诊断。
 
 TUI provider 在启动工作线程前根据环境初始化 `LC_CTYPE`，以支持原生文件/图像服务中的 Unicode 文件名；请使用 UTF-8 locale。现有 POSIX locale 服务的日期和数字格式仍采用 en-US，展示程序的翻译标签和对话框则按应用选定语言切换。
 

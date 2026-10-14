@@ -233,6 +233,22 @@ namespace
         auto deadline = g_get_monotonic_time() + 50000;
         PumpUntil(service, [&]() { return g_get_monotonic_time() >= deadline; });
     }
+
+    struct DiagnosticCapture
+    {
+        vint count = 0;
+        guint handler = g_log_set_handler(nullptr,
+            GLogLevelFlags(G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE),
+            [](const gchar*, GLogLevelFlags, const gchar*, gpointer data)
+            {
+                static_cast<DiagnosticCapture*>(data)->count++;
+            }, this);
+
+        ~DiagnosticCapture()
+        {
+            g_log_remove_handler(nullptr, handler);
+        }
+    };
 }
 
 TEST_FILE
@@ -302,6 +318,26 @@ TEST_FILE
         portal.Activate(1);
         Pump(service);
         TEST_ASSERT(events == 0);
+    });
+
+    TEST_CASE(L"TUI portal denial keeps console output untouched while native diagnostics remain available")
+    {
+        for (auto diagnostics : {true, false})
+        {
+            Portal portal;
+            portal.denied = true;
+            DiagnosticCapture output;
+            vint events = 0;
+            WGacInputService service(nullptr, [&](vint) { events++; }, diagnostics);
+            auto id = service.RegisterGlobalShortcutKey(true, false, false, false, VKEY::KEY_Q);
+            TEST_ASSERT(id >= 0);
+            PumpUntil(service, [&]() { return portal.closed == 1; });
+            portal.Activate(0);
+            Pump(service);
+            TEST_ASSERT(events == 0);
+            TEST_ASSERT((output.count > 0) == diagnostics);
+            TEST_ASSERT(service.UnregisterGlobalShortcutKey(id));
+        }
     });
 
     TEST_CASE(L"Unavailable portal reports unsupported instead of a successful stub ID")

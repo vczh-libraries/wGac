@@ -91,6 +91,8 @@ This incrementally builds `<Workflow repo>/Tools/CppMerge`, `<GacUI repo>/Tools/
 
 `GacBuild.sh` locates all three executables in the sibling GacUI and Workflow repositories and supplies explicit absolute paths to GacGen and CppMerge. It passes a temporary GacGen symlink without resolving it, so the adjacent `Metadata.txt` selects full `Reflection32.bin` and `Reflection64.bin` from `<GacUI repo>/Test/Resources/Metadata/`. Full metadata includes generated dialog types absent from the development tool's usual core-only metadata. The wrapper removes its temporary entry point on success or failure and returns the native tool's exit status. Maintenance uses the sibling Workflow and GacUI repositories; it does not require a Release checkout.
 
+Synchronization adds the imported skin headers to each showcase's generated C++ includes: TuiSkin for TuiControlTest and DarkSkin for FullControlTest. FullControlTest's vertical tab rail uses DarkSkin templates and palette values directly.
+
 After `syncProj.sh` builds the tools, the wrapper can also be used directly:
 
 ```bash
@@ -132,7 +134,10 @@ Run the native service regressions after building:
 ./build/WGacTest/bin/Test_AsyncService /C
 ./build/WGacTest/bin/Test_ImageService /C
 ./build/WGacTest/bin/Test_GlobalShortcuts /C
+./build/WGacTest/bin/Test_RenderingLifecycle /C
 ```
+
+`Test_RenderingLifecycle` requires an available Wayland display. It checks that resizing during a draw preserves the active Cairo buffer and that the next draw uses the resized pool. Native rendering discards an obsolete-sized frame and asks GacUI to render again.
 
 These tests cover pending work during nested modal pumping and cancellation when a callback stops the service.
 Image tests cover disabled grayscale rendering, all 256 alpha values, transparent compositing, cache reuse, and preservation of the original image. Disabled images use the same lightened grayscale conversion as Windows and macOS, with unchanged alpha. The converted surface is created on demand in an `INativeImageFrameCache` owned by the frame and shared by its renderers.
@@ -203,6 +208,8 @@ Always stop background test processes when verification is complete.
 The TUI clipboard uses X11 selections (`libx11-dev` and `libxfixes-dev` are build prerequisites). On a Wayland desktop, XWayland supplies the bridge to other desktop applications; keep `DISPLAY` available. Without an X display, clipboard objects remain process-local. External transfers use UTF-8 text; rich documents and images remain available within the application. XFixes ownership notifications update clipboard-dependent commands. The app must remain running while another client reads its selection. Incoming incremental selections are supported; outgoing text must fit the X server's maximum request size.
 
 Normal Hide, Close and Stop actions restore terminal input and output modes; terminal-tab close is not the normal shutdown test.
+
+The TUI suppresses portal service diagnostics on the console so denied or failed global-shortcut requests cannot scroll its active frame. Native applications retain those diagnostics.
 
 The provider initializes `LC_CTYPE` from the environment before starting workers, so native file/image services can decode Unicode filenames. Use a UTF-8 locale. The existing POSIX locale service retains en-US date/number formatting; translated showcase labels and dialogs still follow the selected application locale.
 

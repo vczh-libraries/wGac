@@ -24,3 +24,6 @@ target_link_libraries(Test_ImageService PRIVATE WGac)
 
 add_executable(Test_GlobalShortcuts "GlobalShortcuts.cpp")
 target_link_libraries(Test_GlobalShortcuts PRIVATE WGac)
+
+add_executable(Test_RenderingLifecycle "RenderingLifecycle.cpp")
+target_link_libraries(Test_RenderingLifecycle PRIVATE WGac)

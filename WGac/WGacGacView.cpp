@@ -26,7 +26,7 @@ void WGacView::StartRendering()
 {
     if (rendering) return;
 
-    currentBuffer = bufferPool->GetNextBuffer();
+    currentBuffer = bufferPool->AcquireNextBuffer();
     if (currentBuffer) {
         currentBuffer->BeginDraw();
         auto* surface = currentBuffer->GetCairoSurface();

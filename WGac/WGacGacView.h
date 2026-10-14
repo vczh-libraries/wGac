@@ -15,7 +15,7 @@ class WGacView
 protected:
     WGacNativeWindow* window;
     WaylandBufferPool* bufferPool;
-    WaylandBuffer* currentBuffer;
+    std::shared_ptr<WaylandBuffer> currentBuffer;
     cairo_t* cairoContext;
     bool rendering;
 
@@ -30,7 +30,7 @@ public:
     void Draw();
 
     cairo_t* GetCairoContext() { return cairoContext; }
-    WaylandBuffer* GetCurrentBuffer() { return currentBuffer; }
+    WaylandBuffer* GetCurrentBuffer() { return currentBuffer.get(); }
 
     int GetWidth() const;
     int GetHeight() const;

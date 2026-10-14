@@ -4,6 +4,7 @@
 #include <wayland-client.h>
 #include <cairo/cairo.h>
 #include <cstdint>
+#include <memory>
 
 namespace vl {
 namespace presentation {
@@ -77,7 +78,7 @@ public:
 class WaylandBufferPool {
 private:
     wl_shm* shm;
-    WaylandBuffer* buffers[2] = {nullptr, nullptr};
+    std::shared_ptr<WaylandBuffer> buffers[2];
     int current = 0;
     uint32_t width = 0;
     uint32_t height = 0;
@@ -87,6 +88,7 @@ public:
     ~WaylandBufferPool();
 
     bool Resize(uint32_t new_width, uint32_t new_height);
+    std::shared_ptr<WaylandBuffer> AcquireNextBuffer();
     WaylandBuffer* GetNextBuffer();
 
     uint32_t GetWidth() const { return width; }

@@ -38,7 +38,8 @@ namespace vl::presentation::wayland
 	{
 	public:
 		TuiWGacInputService(const Func<void(vint)>& shortcutActivated)
-			: WGacInputService(nullptr, shortcutActivated) {}
+			// Console diagnostics would scroll and corrupt the active TUI frame.
+			: WGacInputService(nullptr, shortcutActivated, false) {}
 
 		void StartTimer() override
 		{

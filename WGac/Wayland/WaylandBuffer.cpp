@@ -261,34 +261,27 @@ void WaylandBuffer::EndDraw() {
 WaylandBufferPool::WaylandBufferPool(wl_shm* shm)
     : shm(shm) {}
 
-WaylandBufferPool::~WaylandBufferPool() {
-    delete buffers[0];
-    delete buffers[1];
-}
+WaylandBufferPool::~WaylandBufferPool() = default;
 
 bool WaylandBufferPool::Resize(uint32_t new_width, uint32_t new_height) {
     if (new_width == width && new_height == height) {
         return true;
     }
 
-    // Destroy old buffers
-    delete buffers[0];
-    delete buffers[1];
-    buffers[0] = nullptr;
-    buffers[1] = nullptr;
+    // An active draw keeps its buffer alive until the view releases it.
+    buffers[0].reset();
+    buffers[1].reset();
 
     width = new_width;
     height = new_height;
 
     // Create new buffers
-    buffers[0] = WaylandBuffer::Create(shm, width, height);
-    buffers[1] = WaylandBuffer::Create(shm, width, height);
+    buffers[0].reset(WaylandBuffer::Create(shm, width, height));
+    buffers[1].reset(WaylandBuffer::Create(shm, width, height));
 
     if (!buffers[0] || !buffers[1]) {
-        delete buffers[0];
-        delete buffers[1];
-        buffers[0] = nullptr;
-        buffers[1] = nullptr;
+        buffers[0].reset();
+        buffers[1].reset();
         width = 0;
         height = 0;
         return false;
@@ -298,7 +291,7 @@ bool WaylandBufferPool::Resize(uint32_t new_width, uint32_t new_height) {
     return true;
 }
 
-WaylandBuffer* WaylandBufferPool::GetNextBuffer() {
+std::shared_ptr<WaylandBuffer> WaylandBufferPool::AcquireNextBuffer() {
     // Try current buffer
     if (buffers[current] && !buffers[current]->IsBusy()) {
         return buffers[current];
@@ -314,6 +307,10 @@ WaylandBuffer* WaylandBufferPool::GetNextBuffer() {
     // Both buffers busy - this shouldn't happen with proper frame callbacks
     // Return current anyway (will cause tearing)
     return buffers[current];
+}
+
+WaylandBuffer* WaylandBufferPool::GetNextBuffer() {
+    return AcquireNextBuffer().get();
 }
 
 } // namespace wayland

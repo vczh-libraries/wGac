@@ -23,7 +23,7 @@ protected:
     std::unique_ptr<WGacGlobalShortcutService> globalShortcuts;
 
 public:
-    WGacInputService(TimerFunc timer, const Func<void(vint)>& shortcutActivated = {});
+    WGacInputService(TimerFunc timer, const Func<void(vint)>& shortcutActivated = {}, bool logPortalDiagnostics = true);
     ~WGacInputService();
 
     void PumpEvents();

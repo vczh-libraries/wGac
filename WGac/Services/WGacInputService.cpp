@@ -81,6 +81,7 @@ class WGacGlobalShortcutService
     };
 
     Func<void(vint)> activated;
+    bool logPortalDiagnostics;
     GMainContext* context = g_main_context_new();
     GDBusConnection* connection = nullptr;
     std::string portalOwner;
@@ -115,7 +116,7 @@ class WGacGlobalShortcutService
             if (reply) g_variant_unref(reply);
             else
             {
-                g_warning("wGac portal application registration: %s", error->message);
+                if (logPortalDiagnostics) g_warning("wGac portal application registration: %s", error->message);
                 g_error_free(error);
                 return false;
             }
@@ -177,7 +178,7 @@ class WGacGlobalShortcutService
             3000, nullptr, &error);
         if (!reply)
         {
-            g_warning("wGac global shortcut %s: %s", method, error->message);
+            if (logPortalDiagnostics) g_warning("wGac global shortcut %s: %s", method, error->message);
             g_error_free(error);
             Close(shortcut);
             return false;
@@ -250,7 +251,7 @@ class WGacGlobalShortcutService
             shortcut.request.clear();
             if (response != 0)
             {
-                g_message("wGac global shortcut %s was not approved (portal response %u).", shortcut.trigger.c_str(), response);
+                if (logPortalDiagnostics) g_message("wGac global shortcut %s was not approved (portal response %u).", shortcut.trigger.c_str(), response);
                 Close(shortcut);
             }
             else if (shortcut.creating)
@@ -299,7 +300,8 @@ class WGacGlobalShortcutService
     }
 
 public:
-    WGacGlobalShortcutService(const Func<void(vint)>& callback) : activated(callback) {}
+    WGacGlobalShortcutService(const Func<void(vint)>& callback, bool diagnostics)
+        : activated(callback), logPortalDiagnostics(diagnostics) {}
 
     ~WGacGlobalShortcutService()
     {
@@ -351,12 +353,12 @@ public:
     }
 };
 
-WGacInputService::WGacInputService(TimerFunc _timer, const Func<void(vint)>& shortcutActivated)
+WGacInputService::WGacInputService(TimerFunc _timer, const Func<void(vint)>& shortcutActivated, bool logPortalDiagnostics)
     : timer(_timer)
     , isTimerEnabled(false)
     , usedHotKeys(0)
     , keyNames(256)
-    , globalShortcuts(std::make_unique<WGacGlobalShortcutService>(shortcutActivated))
+    , globalShortcuts(std::make_unique<WGacGlobalShortcutService>(shortcutActivated, logPortalDiagnostics))
 {
     InitKeyMapping();
 }
