@@ -135,13 +135,32 @@ Run the native service regressions after building:
 ./build/WGacTest/bin/Test_ImageService /C
 ./build/WGacTest/bin/Test_GlobalShortcuts /C
 ./build/WGacTest/bin/Test_RenderingLifecycle /C
+./build/WGacTest/bin/Test_RawElement /C
+./build/WGacTest/bin/Test_RawElement /C --hosted
 ```
 
 `Test_RenderingLifecycle` requires an available Wayland display. It checks that resizing during a draw preserves the active Cairo buffer and that the next draw uses the resized pool. Native rendering discards an obsolete-sized frame and asks GacUI to render again.
 
+`Test_RawElement` also requires Wayland. It checks the concrete raw factory in standard and hosted modes, Cairo clipping/state/path isolation with scale and offsets, fixed-data clock pixels, and native remote collection membership and data-only repaint. Native remote lifecycle checks run in standard mode, where the renderer owns a real native window.
+
 These tests cover pending work during nested modal pumping and cancellation when a callback stops the service.
 Image tests cover disabled grayscale rendering, all 256 alpha values, transparent compositing, cache reuse, and preservation of the original image. Disabled images use the same lightened grayscale conversion as Windows and macOS, with unchanged alpha. The converted surface is created on demand in an `INativeImageFrameCache` owned by the frame and shared by its renderers.
 Global-shortcut tests use an isolated D-Bus session (`dbus-daemon`, installed by the prerequisite script) and a mock portal to cover application registration, early responses, modifier encoding, multiple shortcuts, activation on the UI thread, duplicate/invalid registrations, denial, cancellation and removal. They do not grant desktop permissions or replace live desktop verification.
+
+## Custom Cairo Drawing and Raw Clock
+
+`<Raw>` selects `vl::presentation::elements::GuiWaylandElement`, declared in `<wGac repo>/WGac/Renderers/GuiWaylandElement.h`. It inherits `GuiRawElementBase` and exposes a C++ `Rendering` event with the element, render bounds and a borrowed `cairo_t*`. Obtain the context from each callback; never cache or destroy it, retain its backing surface, or start/end/present a frame. The context exists only during the current render pass and is recreated after each pass. Target attachment is a separate lifetime. Initial attachment, late subscriptions and target replacement require no cached Cairo resources or target-change events.
+
+Drawing uses the existing logical coordinates, DPI scale, hosted offsets and clip. The raw renderer clips to its bounds and preserves the caller's Cairo state and current path. Changed `Data` requests a repaint; changed `Id` alone does not; equal assignments do nothing. Raw elements have no intrinsic minimum size. The remote wire contract remains numeric renderer ID, application string ID and string data, with no Wayland handles.
+
+The FullControlTest clock helpers are maintained locally in `<wGac repo>/WGacShared/FullControlTestRawElement*.h/.cpp` and compiled directly into the FCT and native renderer targets. They are independent of the GacUI-only shared test library and are not overwritten by `syncProj.sh`. The reusable element belongs to the WGac library. The remote entry-point hook is owned by `<GacUI repo>/Test/GacUISrc/RemotingTest_Rendering_Win32/GuiMain.cpp` and synchronized from there; Windows clock helpers are never copied or compiled.
+
+The clock paints only `FullControlTest.Clock` with valid received `HH:mm:ss` data. Its timer and 240-by-240 minimum belong to the upstream XML. Retain the returned attachment through the window's drawing lifetime; destroy a collection attachment before its remote renderer. Collection attachments follow element identity, subscribe before protocol delivery, enumerate for late subscription, and handle ID changes and uninstallation. Disconnecting a renderer retains its picture until teardown.
+
+After an upstream raw-contract change, regenerate `<GacUI repo>/Release` with CodePack before running `./import.sh`, `./syncProj.sh`, and `./build.sh` in order. Imports cannot regenerate a stale release. Run synchronization again and verify that the local helpers and CMake entries survive. Resource metadata must match the upstream XML and library; use the owning GacUI generation workflow when metadata needs updating.
+
+Run `./test.sh --app:fct`, then repeat with `--hosted`. Through automation select Misc / Raw Clock and verify visible hands ticking without input, resize, tab hide/show, palette refresh and close/reopen. For the remote path run `./test_core.sh --app:fct --protocol:minihttp` and `./test.sh --app:renderer`; Core automation uses 8888 and renderer automation uses 8889. Verify replacement after closure, live takeover with `--port:8890`, retained disconnect/fatal pictures and the RPT renderer workflow. Inspect native screenshots or captured render buffers as well as automation state, then stop every owned process. Browser HTTP and real Wasm verification use the separate GacJS procedures in the linked upstream jobs.
+
 
 ## Running and Automation
 

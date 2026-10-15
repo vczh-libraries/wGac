@@ -135,13 +135,32 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 ./build/WGacTest/bin/Test_ImageService /C
 ./build/WGacTest/bin/Test_GlobalShortcuts /C
 ./build/WGacTest/bin/Test_RenderingLifecycle /C
+./build/WGacTest/bin/Test_RawElement /C
+./build/WGacTest/bin/Test_RawElement /C --hosted
 ```
 
 `Test_RenderingLifecycle` 需要可用的 Wayland 显示连接。它验证绘制期间改变尺寸会保留正在使用的 Cairo 缓冲区，并且下一次绘制使用调整后的缓冲池。原生渲染会丢弃尺寸已过时的帧，并要求 GacUI 重新绘制。
 
+`Test_RawElement` 同样需要 Wayland。它验证标准和托管模式下的具体 Raw 工厂、带缩放和偏移的 Cairo 裁剪/状态/路径隔离、固定数据的时钟像素，以及原生远程集合成员和仅数据变化触发的重绘。原生远程生命周期检查在标准模式运行，此时渲染器持有真实原生窗口。
+
 这些测试覆盖嵌套模态消息循环中的待执行任务，以及回调停止服务时对剩余任务的取消。
 图像测试覆盖禁用状态的灰度渲染、全部 256 个 Alpha 值、透明像素合成、缓存复用，以及原始图像保持不变。禁用图像使用与 Windows 和 macOS 相同的提亮灰度转换，并保持 Alpha 不变。转换后的表面按需创建，保存在图像帧持有的 `INativeImageFrameCache` 中，由使用该帧的渲染器共享。
 全局快捷键测试使用隔离的 D-Bus 会话（依赖安装脚本包含 `dbus-daemon`）和模拟 Portal，覆盖应用注册、提前到达的响应、修饰键编码、多快捷键、UI 线程触发、重复或无效注册、拒绝、取消和注销。测试不会授予桌面权限，也不能代替真实桌面验证。
+
+## 自定义 Cairo 绘制和 Raw Clock
+
+`<Raw>` 选择 `<wGac repo>/WGac/Renderers/GuiWaylandElement.h` 中的 `vl::presentation::elements::GuiWaylandElement`。它继承 `GuiRawElementBase`，并通过 C++ `Rendering` 事件提供元素、绘制范围和借用的 `cairo_t*`。每次回调都应使用本次提供的上下文，不得缓存或销毁它、保留其底层 surface，或自行开始、结束、提交一帧。上下文只在当前绘制过程有效，每次绘制后都会销毁；渲染目标的绑定具有独立的生命周期。首次绑定、延迟订阅和目标替换不需要缓存 Cairo 资源或增加目标变化事件。
+
+绘制沿用现有逻辑坐标、DPI 缩放、托管窗口偏移和裁剪。Raw 渲染器将绘制限制在元素范围内，并恢复调用者的 Cairo 状态和当前路径。改变 `Data` 请求重绘；只改变 `Id` 不请求重绘；重复赋相同值没有效果。Raw 元素没有固有最小尺寸。远程协议仍仅传输数值渲染器 ID、应用字符串 ID 和字符串数据，不含 Wayland 句柄。
+
+FullControlTest 时钟辅助代码由 `<wGac repo>/WGacShared/FullControlTestRawElement*.h/.cpp` 本地维护，直接编译进 FCT 和原生渲染器目标，不给仅依赖 GacUI 的共享测试库增加依赖，也不会被 `syncProj.sh` 覆盖。可复用元素属于 WGac 库。远程入口钩子的源文件是 `<GacUI repo>/Test/GacUISrc/RemotingTest_Rendering_Win32/GuiMain.cpp`，由同步脚本复制；Windows 时钟辅助代码不会被复制或编译。
+
+时钟仅绘制 ID 为 `FullControlTest.Clock` 且数据为有效 `HH:mm:ss` 的元素。计时器和 240×240 最小尺寸由上游 XML 定义。返回的附件应保留到窗口绘制结束；集合附件必须先于远程渲染器销毁。集合附件按元素身份管理，在协议处理前订阅，枚举现有元素以支持延迟订阅，并处理 ID 变化和卸载。断开连接后保留最后画面，直到实际清理。
+
+上游 Raw 契约改变后，先用 CodePack 重新生成 `<GacUI repo>/Release`，再依次运行 `./import.sh`、`./syncProj.sh`、`./build.sh`；导入脚本不会重新生成过时的发布文件。再次同步并确认本地辅助代码和 CMake 引用未被覆盖。资源元数据必须与上游 XML 和库匹配，需要更新时遵循 GacUI 所属的生成流程。
+
+运行 `./test.sh --app:fct`，再用 `--hosted` 重复。通过自动化选择 Misc / Raw Clock，验证无需输入即可看到指针跳动，以及调整尺寸、切换标签、更新配色、关闭并重新打开。远程路径运行 `./test_core.sh --app:fct --protocol:minihttp` 和 `./test.sh --app:renderer`；Core 自动化端口为 8888，渲染器为 8889。验证关闭后替换、使用 `--port:8890` 并发接管、断连/致命错误画面保留，以及 RPT 渲染器流程。除自动化状态外，还需检查原生截图或绘制缓冲区，并最终停止所有测试进程。浏览器 HTTP 和真实 Wasm 验证遵循上游任务中独立的 GacJS 流程。
+
 
 ## 运行和自动化
 

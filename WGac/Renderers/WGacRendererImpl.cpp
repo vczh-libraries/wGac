@@ -1,4 +1,5 @@
 #include "WGacRenderer.h"
+#include "GuiWaylandElement.h"
 #include "../WGacController.h"
 #include "../WGacNativeWindow.h"
 #include "../WGacGacView.h"
@@ -18,16 +19,13 @@ namespace wgac {
 // Forward declaration
 class WGacLayoutProvider;
 
-namespace
+AString ToPangoUtf8(const WString& text)
 {
-    AString ToPangoUtf8(const WString& text)
-    {
-        auto utf8 = wtou8(text);
-        return AString::CopyFrom(
-            reinterpret_cast<const char*>(utf8.Buffer()),
-            utf8.Length()
-            );
-    }
+    auto utf8 = wtou8(text);
+    return AString::CopyFrom(
+        reinterpret_cast<const char*>(utf8.Buffer()),
+        utf8.Length()
+        );
 }
 
 // WGacParagraph - Pango-based paragraph implementation with proper Unicode handling
@@ -1032,11 +1030,9 @@ namespace presentation {
 namespace elements {
 namespace wgac {
 
-namespace {
-    IWGacRenderTarget* g_currentRenderTarget = nullptr;
-    IWGacObjectProvider* g_wGacObjectProvider = nullptr;
-    IWGacResourceManager* g_wGacResourceManager = nullptr;
-}
+IWGacRenderTarget* g_currentRenderTarget = nullptr;
+IWGacObjectProvider* g_wGacObjectProvider = nullptr;
+IWGacResourceManager* g_wGacResourceManager = nullptr;
 
 // WGacRenderTarget implementation
 class WGacRenderTarget : public IWGacRenderTarget
@@ -1220,7 +1216,7 @@ public:
 
     Ptr<IGuiGraphicsElement> CreateRawElement() override
     {
-        return nullptr;  // Raw elements not supported in Wayland backend
+        return Ptr(GuiWaylandElement::Create());
     }
 
     void NativeWindowCreated(INativeWindow* window) override
@@ -1931,6 +1927,7 @@ void WGacMain(INativeController* nativeController, GuiHostedController* hostedCo
         GuiInnerShadowElementRenderer::Register();
         GuiFocusRectangleElementRenderer::Register();
         GuiDocumentElementRenderer::Register();
+        GuiWaylandElementRenderer::Register();
     }
 
     if (hostedController) hostedController->Initialize();

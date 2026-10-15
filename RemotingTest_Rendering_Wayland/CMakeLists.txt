@@ -6,6 +6,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "bin/")
 add_executable(RemotingTest_Rendering_Wayland
     "GuiMain.cpp"
     "Main.cpp"
+    "../WGacShared/FullControlTestRawElement.cpp"
+    "../WGacShared/FullControlTestRawElementRemote.cpp"
 )
 target_include_directories(RemotingTest_Rendering_Wayland PRIVATE
     "../Import"

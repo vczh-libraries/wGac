@@ -11,6 +11,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "bin/")
 
 add_executable(Test_FullControlTest
     "Main.cpp"
+    "../WGacShared/FullControlTestRawElement.cpp"
     ${FULL_CONTROL_TEST_GENERATED_SOURCES}
 )
 target_include_directories(Test_FullControlTest PRIVATE

@@ -56,6 +56,7 @@ set(WGAC_FILES
     "../WGac/Services/WGacClipboardService.cpp"
     "../WGac/Services/WGacAutomationService.cpp"
     "../WGac/Renderers/WGacRendererImpl.cpp"
+    "../WGac/Renderers/GuiWaylandElement.cpp"
     "../WGac/Wayland/WaylandDisplay.cpp"
     "../WGac/Wayland/WaylandBuffer.cpp"
     "../WGac/Wayland/WaylandSeat.cpp"

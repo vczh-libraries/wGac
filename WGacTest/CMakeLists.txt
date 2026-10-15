@@ -27,3 +27,10 @@ target_link_libraries(Test_GlobalShortcuts PRIVATE WGac)
 
 add_executable(Test_RenderingLifecycle "RenderingLifecycle.cpp")
 target_link_libraries(Test_RenderingLifecycle PRIVATE WGac)
+
+add_executable(Test_RawElement
+    "RawElement.cpp"
+    "../WGacShared/FullControlTestRawElement.cpp"
+    "../WGacShared/FullControlTestRawElementRemote.cpp"
+)
+target_link_libraries(Test_RawElement PRIVATE WGac)
