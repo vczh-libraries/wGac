@@ -100,10 +100,10 @@ Review the complete generated diff before committing because both the scanner an
 
 Update `README.md` and its Chinese translation `README_CN.md` when files, targets, scripts, prerequisites, or commands change. Keep the two documents mutually linked and semantically equivalent.
 
-Linux-specific remote-renderer workflow changes belong in:
+Linux-specific verification process belongs in:
 
-- `../GacUI/.github/Jobs/DebugRemoteProtocolWithNativeRenderer.md`
-- `../Tools/Jobs/job.verifyRemoteProtocol.prompt.md`
+- `../GacUI/.github/Jobs/job.rpXPlat.prompt.md`
+- `../GacUI/.github/Jobs/job.rpWasm.prompt.md`
 
 Linux computer-use guidance belongs in:
 
