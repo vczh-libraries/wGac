@@ -149,9 +149,13 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 
 ## 自定义 Cairo 绘制和 Raw Clock
 
+`<Raw/>` 是 GacUI 本地和远程图形应用进行自定义绘制的标准首选方式。在 XML 中或通过 `GuiRawElementBase` 设置 `Id` 和 `Data`，为所属组合提供合适的范围或最小尺寸，然后在 C++ 中绑定平台绘制逻辑。TUI 不支持 `<Raw/>`；其资源管理器会拒绝创建，不会替换成其他图形元素。
+
 `<Raw>` 选择 `<wGac repo>/WGac/Renderers/GuiWaylandElement.h` 中的 `vl::presentation::elements::GuiWaylandElement`。它继承 `GuiRawElementBase`，并通过 C++ `Rendering` 事件提供元素、绘制范围和借用的 `cairo_t*`。每次回调都应使用本次提供的上下文，不得缓存或销毁它、保留其底层 surface，或自行开始、结束、提交一帧。上下文只在当前绘制过程有效，每次绘制后都会销毁；渲染目标的绑定具有独立的生命周期。首次绑定、延迟订阅和目标替换不需要缓存 Cairo 资源或增加目标变化事件。
 
 绘制沿用现有逻辑坐标、DPI 缩放、托管窗口偏移和裁剪。Raw 渲染器将绘制限制在元素范围内，并恢复调用者的 Cairo 状态和当前路径。改变 `Data` 请求重绘；只改变 `Id` 不请求重绘；重复赋相同值没有效果。Raw 元素没有固有最小尺寸。远程协议仍仅传输数值渲染器 ID、应用字符串 ID 和字符串数据，不含 Wayland 句柄。
+
+Core 持有这些字符串，并在帧中批量发送变化；单独修改 `Id` 要等到下一次由其他原因触发的帧才会传到渲染器。原生远程绘制在渲染器进程中进行，`GuiRemoteRendererSingle` 通过当前资源管理器创建 `GuiWaylandElement`。订阅 `RawElementInstalled`、`RawElementChanged` 和 `RawElementUninstalled`，并通过 `GetRawElements()` 支持延迟绑定。安装事件发生在首次描述符和渲染目标设置之前，此时字符串为空；描述符先应用两个字段，再发送一次变化通知。卸载回调执行期间元素仍在集合中，之后才解除渲染目标绑定。调整尺寸和重建目标不会改变元素身份。GacJS 可以通过页面自己的绘制逻辑显示相同状态；Raw 协议不传输 Cairo 回调或绘制后的像素。
 
 FullControlTest 时钟辅助代码由 `<wGac repo>/WGacShared/FullControlTestRawElement*.h/.cpp` 本地维护，直接编译进 FCT 和原生渲染器目标，不给仅依赖 GacUI 的共享测试库增加依赖，也不会被 `syncProj.sh` 覆盖。可复用元素属于 WGac 库。远程入口钩子的源文件是 `<GacUI repo>/Test/GacUISrc/RemotingTest_Rendering_Win32/GuiMain.cpp`，由同步脚本复制；Windows 时钟辅助代码不会被复制或编译。
 
