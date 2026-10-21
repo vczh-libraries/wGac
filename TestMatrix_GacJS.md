@@ -1,45 +1,29 @@
-# Test Matrix Card 2026-10-14T13:54:35.543Z
-
-Scope: complete Linux verification from the current remote-protocol job and SOP. Times use UTC. Each row is updated when it starts or finishes.
+# Test Matrix Card 2026-10-21T11:19:05.560Z
 
 ## Test Matrix
 
 | Test Item | 1st |
 | --- | --- |
-| [Linux][`/RPT`][`/MiniHttp`] | 2026-10-14T14:04:06.370Z |
-| [Linux][`/FCT`][`/MiniHttp`] | 2026-10-14T14:08:21.247Z |
-| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over network] | 2026-10-14T14:25:02.162Z |
-| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over stdio `/Cli:<path>`] | 2026-10-14T14:27:48.022Z |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS browser host `?rvmhost`] | 2026-10-14T14:28:42.149Z |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over network] | 2026-10-14T14:27:52.051Z |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node SEA over stdio `/Cli:<path>`] | 2026-10-14T14:28:01.220Z |
-| [Linux][Import / codegen / build / test] | 2026-10-14T13:54:57.321Z |
-| [Linux][Repeated codegen stability] | 2026-10-14T14:02:36.651Z |
-
-## Verification details
-
-Import, codegen, build and all 11 package test scripts passed. Firefox 146.0.1 is used for the live Linux matrix. The second codegen preserved hashes of all tracked files. Windows-only native E2E suites report their expected skip and are not counted as Linux runtime coverage.
-
-RPT passed initial UI, Home mutation, all three populated grid rows and clear, document modal, replacement and takeover with retained state, repeated local shortcuts and five-button modifier/motion/double-click/wheel checks, normal File-menu close and a fresh exact Core-authored fatal error. Mouse4/Mouse5 used canceled browser DOM events; standard buttons used Playwright mouse input. Browser global desktop shortcuts are outside this renderer.
-
-FCT passed dual-list add/clear, distinct search/rich-editor markers, bracket input, replacement with retained text and repeated shortcut/mouse checks. Vertical tabs, Up/Down and Alt access, the five-pixel gap, retained EasyLayout state and Default/Ember/Aurora/Default colors passed. Responsive modal sizes were 240/350/440/680 by 320, plus 680 by 220/520; all 24 films were traversed in each appearance, account menu selection and eight 32-by-32 images checked, grow/shrink cycles and all three close/reopen paths passed. Normal Force Exit ended Core with code 0.
-
-native: initial greeting, Translate, renderer replacement, second-host rejection and normal UI close, idle-next-call loss (63 ms), and blocked-delivery loss (5336 ms) passed. Both fatal runs captured exactly one Core !Error and one matching page error.
-
-stdio: initial greeting, Translate, renderer replacement, Core !Exit and child reaping, idle-next-call loss (56 ms), and blocked-delivery loss (9 ms) passed. Both fatal runs captured exactly one Core !Error and one matching page error.
-
-node: initial greeting, Translate, renderer replacement, second-host rejection and normal UI close, idle-next-call loss (47 ms), and blocked-delivery loss (5373 ms) passed. Both fatal runs captured exactly one Core !Error and one matching page error.
-
-sea: initial greeting, Translate, renderer replacement, Core !Exit and child reaping, idle-next-call loss (65 ms), and blocked-delivery loss (9 ms) passed. Both fatal runs captured exactly one Core !Error and one matching page error.
-
-browser: initial greeting, Translate, renderer replacement, second-host rejection and normal UI close, idle-next-call loss (118 ms), and blocked-delivery loss (5328 ms) passed. Both fatal runs captured exactly one Core !Error and one matching page error.
-
-A fresh RPT fatal run also captured exactly one incoming !Error with This is a fatel error!, one matching page error, the error mask and nonzero Core termination.
-
-## Platform coverage limits
-
-Physical input and displayed font/color fidelity were not inferred from browser automation. Mouse4/Mouse5 used browser DOM event dispatch; Windows-only native E2E suites were skipped as expected on Linux.
+| [Linux][`/RPT`][`/MiniHttp`] | PASS |
+| [Linux][`/FCT`][`/MiniHttp`] | PASS for listed evidence; OS/hardware limitations below |
+| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over network] | PASS |
+| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over stdio `/Cli:<path>`] | PASS |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS browser host `?rvmhost`] | PASS |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over network] | PASS |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node SEA over stdio `/Cli:<path>`] | PASS |
 
 ## Issues Found and Fix
 
-No browser application defect was observed. Imported snapshot changes reflect current upstream platform paths, element identities and generated index order; repeated codegen was stable.
+- A rejected second browser RVM host exposed cleanup before renderer startup twice: `ResizeObserver` was undefined. Guarding renderer teardown with `rendererStarted` preserves the expected host-rejection error. The lifecycle unit regression and repeated browser-host row pass after the fix.
+
+## Observations and limitations
+
+- Linux GacJS runs in Firefox; Chromium supplies browser-level touch acquisition coverage in the Wasm matrix. Native wGac touch exclusions do not apply to either browser.
+
+- Firefox FCT: both lists add/clear; distinct Search/rich-editor markers retained across tabs and renderer takeover; local Ctrl+Q and Ctrl+Alt+Super+Q dialogs; left/middle/right and Alt/Super/Ctrl/Shift readouts. Layout subpages, retained easy-layout editor/choice through Default/Ember/Aurora/Default; responsive modal 240/350/440/680 by 320 and 680 by 220/520, reverse cycles, equal footer widths, eight account menu entries, selection/scroll and OK/Cancel/title-close. Raw Clock pixels update, hide/show and resize; close/reconnect and live takeover preserve state. Full Firefox DOM-synthetic Touching/TouchingList/ordinary-touch operations pass through the HTTP renderer; no page errors. Force Exit settles normally. Physical touch and OS global-hotkey activation are not inferred.
+
+- RPT: initial/clicked label, shortcuts, three grid rows/clear, document modal, reconnect/takeover state, normal confirmed close, and a fresh fatal run with exactly `This is a fatel error!`, one Core error packet and one browser rethrow.
+
+- All five Firefox RVM host modes: initial/edited greetings, normal shutdown/host cleanup, idle host loss and host loss during editing. Network modes reject a second host without replacing the accepted one. Native/Node process tests suspend the accepted host before editing and kill that exact process; stdio tests track the executable below its shell. Browser-host pending-RPC test holds the actual reply, confirms an automation read remains queued, stops the host and observes the read release plus exactly one Core fatal packet/browser rethrow. Renderer takeover preserves the accepted browser host.
+
+- Additional Chromium HTTP acquisition covered all five mouse buttons with no modifiers, Alt, Super, both, and Ctrl/Shift/Alt/Super. Exact down/up and modifier labels passed and the URL never changed. Firefox Playwright only accepts left/middle/right in `mouse.down`; its back/forward acquisition is not claimed. Browser global OS shortcuts and physical hardware remain unverified.
