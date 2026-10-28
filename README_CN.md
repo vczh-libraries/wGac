@@ -317,3 +317,18 @@ VlppOS 会自动启用 Kitty 键盘协议并解析 Super；无需修改应用代
 - **Ctrl+Alt+Super+Shift+F8** 是全局快捷键，没有本地按键回退路径。它独立于终端键盘编码使用桌面 Portal，因此授权后在 GNOME Terminal 中也能生效。桌面环境要求请参阅[全局快捷键](#全局快捷键)。
 - 标准 SGR 鼠标报告没有 Super 位，因此鼠标 `osSuper` 保持为 false。旧终端的 Meta 仍映射为 Alt。
 - 当前请求的键盘模式不单独上报修饰键，因此不能通过单按 Alt 显示访问键提示；仍可使用鼠标和方向键操作菜单。
+
+## 远程功能选项与文档文件
+
+原生渲染器和可移植核心示例默认关闭功能注入。分别向两端传递
+`/remoteDT`、`/remoteLocale` 和 `/remoteFS`，例如
+`./test_core.sh --app:fct --protocol:minihttp -remoteDT -remoteLocale -remoteFS`
+以及 `./test.sh --app:renderer -remoteDT -remoteLocale -remoteFS`。
+前台和 `--unblock` 模式均原样转发这些选项。替换渲染器后重新检查能力。
+DateTime/Locale 不可用时调用核心原有实现；已启用但没有渲染器支持的文件系统
+只提供空的 `/` 根目录，不访问核心文件。
+
+同步的 FullControlTest 源码使用 `FullControlTestEventHandlers.h/.cpp`。
+本地入口为每个编辑器自己的文档视图绑定四个持久化事件，并绑定调色板事件。
+私有 `.bin` 文件嵌入图片内容；私有保存和 RTF/HTML 导出同步完成，包括远程流关闭。
+协议变化后，应一起同步框架、资源和共享源码。

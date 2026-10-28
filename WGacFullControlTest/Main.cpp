@@ -1,6 +1,6 @@
 #include "gac_include.h"
 #include "FullControlTest.h"
-#include "FullControlTestPalette.h"
+#include "FullControlTestEventHandlers.h"
 #include "FullControlTestRawElement.h"
 #include "../WGac/Renderers/WGacRenderer.h"
 #include "../WGac/Services/WGacAutomationService.h"
@@ -34,7 +34,7 @@ void GuiMain()
 {
     demo::MainWindow window;
     auto rawClockAttachment = demo::AttachFullControlTestRawElement(window.GetClockElement());
-    window.PaletteSelected.Add(&demo::OnPaletteSelected);
+    demo::AttachFctEvents<demo::DocumentEditorBase>(&window);
     window.ForceCalculateSizeImmediately();
     window.MoveToScreenCenter();
 

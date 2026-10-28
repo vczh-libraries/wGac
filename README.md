@@ -320,3 +320,19 @@ The review on Ubuntu 26.04.1 / GNOME Shell 50.1 identifies **one newly enabled f
 | TUI locale and external rich clipboard | Existing provider restrictions; the desktop upgrade does not implement these paths. |
 
 The previously listed title-drag bug no longer reproduces: compositor-delivered dragging of the raw native renderer preserves the pointer's offset from the window corner. The compositor move path was already implemented in wGac commit `96ec017`; this is a corrected historical note, not an additional feature supplied by Ubuntu 26.04. See [the verification record](TestMatrix_Tui.md#ubuntu-2604-review-2026-10-09) for build and live test results.
+## Remote feature options and document files
+
+The native renderer and portable core demo default to no feature injection. Pass
+`/remoteDT`, `/remoteLocale` and `/remoteFS` independently to both processes, for
+example `./test_core.sh --app:fct --protocol:minihttp -remoteDT -remoteLocale -remoteFS`
+and `./test.sh --app:renderer -remoteDT -remoteLocale -remoteFS`. The shell translates single-dash options to slash switches, which are forwarded in foreground and `--unblock` modes. Renderer capabilities are
+reevaluated after replacement. Missing DateTime/Locale capabilities use the core
+predecessor; an enabled filesystem without renderer support exposes an empty `/`
+root and never accesses core files.
+
+`FullControlTestEventHandlers.h/.cpp` replaces `FullControlTestPalette.h/.cpp` in
+the synchronized FullControlTest sources. The local entry point attaches the palette
+handler and all four persistence events to each editor's own document viewer.
+Private `.bin` files contain their image bytes; private save and RTF/HTML exports
+complete synchronously, including remote stream close. Synchronize the framework,
+resources and shared sources together after this protocol change.

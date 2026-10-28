@@ -108,3 +108,19 @@ Linux-specific verification process belongs in:
 Linux computer-use guidance belongs in:
 
 - `../Tools/Copilot/Guidelines/Running-ComputerUse.md`
+
+## Remote feature injection
+
+Native renderer executables accept `/remoteDT`, `/remoteLocale` and `/remoteFS`.
+All three demo options default to false. The corresponding `test.sh --app:renderer`
+and `test_core.sh --app:fct --protocol:minihttp` shell options are `-remoteDT`,
+`-remoteLocale` and `-remoteFS`; scripts translate them to slash switches in both
+foreground and `--unblock` modes. Enable each desired feature independently on
+both core and renderer. Keep the canonical renderer GuiMain and SharedArguments
+synchronized from GacUI. Reconnection reevaluates capabilities; DateTime/Locale
+fall back to the predecessor, while an unavailable injected filesystem is empty.
+
+FullControlTest's authored shared helper is `FullControlTestEventHandlers.h/.cpp`.
+Synchronize it with the XML/generated event definitions. Native entry points call
+`demo::AttachFctEvents<demo::DocumentEditorBase>` once per main window, attaching
+four document events per editor plus the palette event to their correct owners.
