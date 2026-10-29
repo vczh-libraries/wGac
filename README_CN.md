@@ -330,6 +330,12 @@ VlppOS 会自动启用 Kitty 键盘协议并解析 Super；无需修改应用代
 DateTime/Locale 不可用时调用核心原有实现；已启用但没有渲染器支持的文件系统
 只提供空的 `/` 根目录，不访问核心文件。
 
+使用 GacJS 时，启动同一个 Core 脚本，然后打开 HTTP 入口并传入
+`?remoteDT&remoteLocale&remoteFS&corehost=localhost`。浏览器和 Core 必须分别启用
+对应功能。浏览器文件保存在页面来源的持久化 OPFS 中；Core 本地 Unicode 路径
+需要已安装的 UTF-8 locale。REFRESH 保留 OPFS 数据。使用 FCT 检查渲染器替换：
+刷新带有 `rvmhost` 的页面也会移除已接受的视图模型宿主，因此必须重启该 RVMT Core。
+
 同步的 FullControlTest 源码使用 `FullControlTestEventHandlers.h/.cpp`。
 本地入口为每个编辑器自己的文档视图绑定四个持久化事件，并绑定调色板事件。
 私有 `.bin` 文件嵌入图片内容；私有保存和 RTF/HTML 导出同步完成，包括远程流关闭。

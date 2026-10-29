@@ -332,6 +332,13 @@ reevaluated after replacement. Missing DateTime/Locale capabilities use the core
 predecessor; an enabled filesystem without renderer support exposes an empty `/`
 root and never accesses core files.
 
+For GacJS, start the same Core wrapper and open its HTTP entry with
+`?remoteDT&remoteLocale&remoteFS&corehost=localhost`. The browser and Core opt in
+independently. Browser files live in the page origin's persistent OPFS; use an
+installed UTF-8 locale for Core-local Unicode paths. REFRESH preserves OPFS.
+Use FCT for renderer replacement checks: refreshing a page with `rvmhost`
+also removes its accepted view-model host, so that RVMT Core must be restarted.
+
 `FullControlTestEventHandlers.h/.cpp` replaces `FullControlTestPalette.h/.cpp` in
 the synchronized FullControlTest sources. The local entry point attaches the palette
 handler and all four persistence events to each editor's own document viewer.
