@@ -20,6 +20,8 @@ The retained `WGacDialogService` implementation uses GIO, but current Wayland ap
 
 Run applications from a Wayland desktop session with `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` available.
 
+Use a UTF-8 locale for Unicode filenames. Standard, hosted and remote renderer startup initializes `LC_CTYPE` from the environment before creating the native controller, matching the TUI provider. Date and number formatting still use the existing en-US locale implementation.
+
 wGac requires libdecor and a real runtime decoration plugin at startup; it stops with a diagnostic instead of silently accepting libdecor's undecorated fallback. To make repeated switches between GacUI custom frames and platform frames safe on every compositor, wGac forces libdecor to provide its client-side platform frame even when server-side decorations are available. This libdecor frame is the native platform frame from GacUI's perspective and is distinct from GacUI's custom window template.
 
 For maintenance work, keep the GacUI, Workflow, and Tools repositories beside wGac, or run `./syncOrg.sh`. `import.sh` reads GacUI framework snapshots, and `syncProj.sh` reads GacUI test resources and builds the Workflow and GacUI generators. The sibling Release repository is not a build or import dependency.

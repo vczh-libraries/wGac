@@ -5,6 +5,7 @@
 #include "../WGacGacView.h"
 #include "../Wayland/WaylandDisplay.h"
 #include "../Services/WGacImageService.h"
+#include <clocale>
 #include <functional>
 
 using namespace vl::collections;
@@ -1950,6 +1951,8 @@ void WGacMain(INativeController* nativeController, GuiHostedController* hostedCo
 
 int SetupWGacRendererInternal(bool hosted, bool raw)
 {
+    // Native file and image services use the locale's multibyte conversion.
+    CHECK_ERROR(std::setlocale(LC_CTYPE, "") != nullptr, L"SetupWGacRendererInternal#Failed to initialize the character locale.");
     auto nativeController = wayland::GetWGacController();
 
     GuiHostedController* hostedController = nullptr;

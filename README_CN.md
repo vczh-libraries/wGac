@@ -20,6 +20,8 @@ sudo ./build-prerequisites-ubuntu.sh
 
 请在 Wayland 桌面会话中运行应用，并确保 `WAYLAND_DISPLAY` 和 `XDG_RUNTIME_DIR` 可用。
 
+请使用 UTF-8 locale 以支持 Unicode 文件名。标准、Hosted 和远程渲染器启动时，会在创建原生控制器之前根据环境初始化 `LC_CTYPE`，与 TUI provider 保持一致。日期和数字格式仍使用现有的 en-US locale 实现。
+
 wGac 启动时需要 libdecor 和实际可用的运行时装饰插件；如果只能得到 libdecor 不绘制装饰的后备插件，wGac 会输出诊断并停止，而不会静默地继续运行。为了在所有合成器上安全地反复切换 GacUI 自定义边框和平台边框，即使服务端装饰可用，wGac 也会强制 libdecor 提供客户端绘制的平台边框。从 GacUI 的角度看，该 libdecor 边框属于原生平台边框，与 GacUI 的自定义窗口模板不同。
 
 维护仓库时，请将 GacUI、Workflow 和 Tools 仓库放在 wGac 的同级目录，或者运行 `./syncOrg.sh`。`import.sh` 读取 GacUI 框架快照；`syncProj.sh` 读取 GacUI 测试资源，并编译 Workflow 和 GacUI 中的代码生成器。同级的 Release 仓库不是编译或导入依赖。
