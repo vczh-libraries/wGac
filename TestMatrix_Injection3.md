@@ -351,3 +351,5 @@ Cross-machine and scoped link-local IPv6 communication were unavailable as
 reported above. No macOS, GacJS, Windows UIA/transport, physical touch or desktop
 global-hot-key consent result is claimed. All reported native UI interactions
 use the application's automation service in a real Wayland session.
+
+Future launcher runs use --remoteDT, --remoteLocale and --remoteFS. Historical executed commands above retain their original spelling.

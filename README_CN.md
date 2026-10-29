@@ -324,8 +324,8 @@ VlppOS 会自动启用 Kitty 键盘协议并解析 Super；无需修改应用代
 
 原生渲染器和可移植核心示例默认关闭功能注入。分别向两端传递
 `/remoteDT`、`/remoteLocale` 和 `/remoteFS`，例如
-`./test_core.sh --app:fct --protocol:minihttp -remoteDT -remoteLocale -remoteFS`
-以及 `./test.sh --app:renderer -remoteDT -remoteLocale -remoteFS`。
+`./test_core.sh --app:fct --protocol:minihttp --remoteDT --remoteLocale --remoteFS`
+以及 `./test.sh --app:renderer --remoteDT --remoteLocale --remoteFS`。
 前台和 `--unblock` 模式均原样转发这些选项。替换渲染器后重新检查能力。
 DateTime/Locale 不可用时调用核心原有实现；已启用但没有渲染器支持的文件系统
 只提供空的 `/` 根目录，不访问核心文件。
