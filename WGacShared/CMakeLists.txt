@@ -83,6 +83,7 @@ target_include_directories(GacUI PUBLIC
 target_link_libraries(GacUI PUBLIC
     Threads::Threads
     PkgConfig::URING
+    anl
 )
 
 add_library(WGac STATIC ${WGAC_FILES})

@@ -332,3 +332,18 @@ DateTime/Locale 不可用时调用核心原有实现；已启用但没有渲染�
 本地入口为每个编辑器自己的文档视图绑定四个持久化事件，并绑定调色板事件。
 私有 `.bin` 文件嵌入图片内容；私有保存和 RTF/HTML 导出同步完成，包括远程流关闭。
 协议变化后，应一起同步框架、资源和共享源码。
+
+## 选择远程 Core 主机
+
+`./test.sh --app:renderer --corehost:core.example.com` 指定目标主机；省略 `--corehost` 时默认为 localhost。此选项仅用于 renderer，区分大小写，值不能为空，且只能出现一次。前台和 `--unblock` 分支均以一个带引号的 `/corehost:<host>` 参数转发。原生入口使用 GacUI 的统一解析器，接受 DNS 主机名、IPv4 和 IPv6 地址（IPv6 可带一对方括号），不接受 URL、路径或额外端口。无效或重复的原生参数会在启动传输前被拒绝。
+
+```bash
+./test.sh --app:renderer --corehost:core.example.com --port:8889
+./test.sh --app:renderer --corehost:::1 --port:8890 --unblock
+```
+
+这里的原生渲染器使用 `/MiniHttp`；`/Pipe` 和 `/Http` 是 Windows 传输。协议 TCP 端口始终为 8888，`--port` 只控制渲染器本地自动化端口，默认为 8889，可与目标主机和功能注入选项组合。启动本地 Core/requester 的脚本不需要目标主机选项。手动启动的 `RemotingTest_RvmHost /MiniHttp /corehost:core.example.com` 可连接 Core `/RVMT` 或 requester 服务器；本地 `/Cli` 模式拒绝显式指定主机。
+
+SharedArguments 和渲染器 GuiMain 从 GacUI 同步，平台 Main.cpp 单独维护。套接字层使用不带方括号的 IPv6，HTTP authority 添加方括号。原生监听器绑定通配接口；实际网络可达性仍取决于主机环境，同机主机名测试不能证明另一台计算机可访问。
+
+Linux 的 GacUI 目标链接 liburing 和 glibc 的 libanl，以支持异步 DNS 解析。
