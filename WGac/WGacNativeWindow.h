@@ -97,7 +97,8 @@ protected:
     bool IsPopupMode() const;
     xdg_surface* GetXdgSurface() const;
     xdg_toplevel* GetXdgToplevel() const;
-    bool RequestClose();
+    bool RequestClose(bool closeWindow = true, bool force = false);
+    void HideInternal();
     void SetApplicationId(const AString& applicationId);
     INativeWindowListener::HitTestResult PerformCustomFrameHitTest(int32_t x, int32_t y);
     void ClearPressedCaptionButton();

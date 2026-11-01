@@ -359,3 +359,9 @@ Native renderers here use `/MiniHttp`; `/Pipe` and `/Http` are Windows transport
 
 Keep SharedArguments and renderer GuiMain synchronized from GacUI, and maintain the platform Main.cpp separately. Socket destinations are unbracketed IPv6; HTTP authorities add brackets. Native listeners use wildcard interfaces; network reachability still depends on the host environment. Same-machine hostname checks do not verify another computer.
 The Linux GacUI target links liburing and glibc libanl for asynchronous DNS resolution.
+
+## Popup owner lifecycle
+
+`WGacNativeWindow::Hide` in `<wGac repo>/WGac/WGacNativeWindow.cpp` runs the same cancellable `BeforeClosing` and accepted `AfterClosing` sequence for hide and close. Shared GacUI uses `AfterClosing` to dismiss explicitly owned tooltip, popup and menu descendants before the owner becomes invisible. `HideInternal` only tears down native roles and publishes `Closed`; requested close sets the existing closed state without repeating the callbacks. Already hidden popups do not publish another close sequence.
+
+Compositor dismissal and ancestor xdg-role teardown are mandatory: they ignore cancellation but still publish accepted-close notifications before native teardown. The native child scan is restarted after each child closes, since shared `GuiPopup::Closed` detaches its parent. Descendant roles disappear first. Keep this native role rule separate from GacUI's explicit control-relative ownership policy.

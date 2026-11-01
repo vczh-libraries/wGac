@@ -355,3 +355,9 @@ DateTime/Locale 不可用时调用核心原有实现；已启用但没有渲染�
 SharedArguments 和渲染器 GuiMain 从 GacUI 同步，平台 Main.cpp 单独维护。套接字层使用不带方括号的 IPv6，HTTP authority 添加方括号。原生监听器绑定通配接口；实际网络可达性仍取决于主机环境，同机主机名测试不能证明另一台计算机可访问。
 
 Linux 的 GacUI 目标链接 liburing 和 glibc 的 libanl，以支持异步 DNS 解析。
+
+## 弹出窗口的所有者生命周期
+
+`<wGac repo>/WGac/WGacNativeWindow.cpp` 中的 `WGacNativeWindow::Hide` 对隐藏和关闭请求执行相同的可取消 `BeforeClosing` 和接受关闭后的 `AfterClosing` 通知。共享 GacUI 代码在 `AfterClosing` 中关闭显式归属于所有者的提示、弹出窗口和菜单，确保它们在所有者不可见之前关闭。`HideInternal` 仅拆除原生角色并发送 `Closed`；关闭请求设置已有的关闭状态，不重复发送通知。已隐藏的弹出窗口不会再次发送关闭通知。
+
+合成器关闭弹出窗口或拆除祖先 xdg 角色时，关闭不可取消，但仍须在原生拆除前发送接受关闭通知。每个子窗口关闭后重新扫描原生子列表，因为共享 `GuiPopup::Closed` 会解除父关系。先拆除后代角色；此原生协议规则与 GacUI 显式指定控件所有者的规则分别维护。

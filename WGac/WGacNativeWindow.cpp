@@ -555,26 +555,9 @@ void WGacNativeWindow::DismissPopupChildren()
             break;
         }
 
-        if (child->visible)
-        {
-            child->Hide(true);
-        }
-        else
-        {
-            child->Hide(false);
-        }
-
-        // An ancestor popup role cannot legally disappear while a descendant
-        // remains topmost. If application code cancelled the close, force only
-        // the native role teardown needed to preserve xdg-shell ordering.
-        if (childWindows.Contains(child) &&
-            (child->visible ||
-             child->popup ||
-             child->xdgSurface ||
-             child->popupSyncCallback))
-        {
-            child->Hide(false);
-        }
+        // An ancestor role cannot disappear while a descendant remains topmost.
+        // Complete the accepted-close notifications before native role teardown.
+        child->RequestClose(false, true);
     }
 }
 
@@ -973,73 +956,8 @@ void WGacNativeWindow::xdg_popup_configure(void* data, xdg_popup* /*popup*/,
 void WGacNativeWindow::xdg_popup_done(void* data, xdg_popup* /*popup*/)
 {
     auto* self = static_cast<WGacNativeWindow*>(data);
-    // Popup was dismissed (e.g., user clicked outside)
-    self->DismissPopupChildren();
-
-    // Save parent reference before clearing focus
-    auto* parent = self->parentWindow;
-
-    // A destroyed popup cannot borrow its parent's pointer identity: the
-    // popup surface and enter serial are no longer a valid pair. Wait for a
-    // real parent enter before applying the parent's cursor.
-    if (self->display && self->display->GetWaylandSeat()) {
-        self->display->GetWaylandSeat()->ClearFocusFor(self);
-    }
-
-    // Reset state so next Show() works correctly
-    self->hasKeyboardFocus = false;
-    self->capturing = false;
-
-    // Clean up xdg resources so popup can be shown again
-    if (self->frameCallback) {
-        wl_callback_destroy(self->frameCallback);
-        self->frameCallback = nullptr;
-    }
-    self->pendingFrame = false;
-    self->ReleasePopupGrab();
-    self->popupActivationSerial = 0;
-    if (self->popup) {
-        xdg_popup_destroy(self->popup);
-        self->popup = nullptr;
-    }
-    if (self->xdgSurface) {
-        xdg_surface_destroy(self->xdgSurface);
-        self->xdgSurface = nullptr;
-    }
-    // Unmap the surface by attaching null buffer so it can be remapped later
-    if (self->surface) {
-        wl_surface_attach(self->surface, nullptr, 0, 0);
-        wl_surface_commit(self->surface);
-    }
-    self->configured = false;
-    self->hasFirstFrame = false;
-    self->visible = false;
-
-    // Use parent reference saved earlier
-    bool parentVisible = parent ? parent->visible : false;
-
-    // Follow Windows event sequence: BeforeClosing -> AfterClosing -> Closed
-    bool cancel = false;
-    for (vint i = 0; i < self->listeners.Count(); i++) {
-        self->listeners[i]->BeforeClosing(cancel);
-    }
-
-    // AfterClosing triggers WindowReadyToClose which re-enables owner window in modal dialogs
-    if (!cancel) {
-        for (vint i = 0; i < self->listeners.Count(); i++) {
-            self->listeners[i]->AfterClosing();
-        }
-    }
-
-    // Explicitly restore focus to parent window BEFORE Closed()
-    if (parent && parentVisible) {
-        parent->OnFocusChanged(true);
-    }
-
-    // Notify listeners that window is closed
-    for (vint i = 0; i < self->listeners.Count(); i++) {
-        self->listeners[i]->Closed();
-    }
+    // The compositor has already dismissed the role; cancellation cannot keep it open.
+    self->RequestClose(false, true);
 }
 
 void WGacNativeWindow::frame_done(void* data, wl_callback* callback, uint32_t /*time*/)
@@ -1352,12 +1270,17 @@ void WGacNativeWindow::ShowMinimized() {
     }
 }
 
-bool WGacNativeWindow::RequestClose() {
+bool WGacNativeWindow::RequestClose(bool closeWindow, bool force) {
+    if (!visible && IsPopupMode()) {
+        HideInternal();
+        return true;
+    }
+
     bool cancel = false;
     for (vint i = 0; i < listeners.Count(); i++) {
         listeners[i]->BeforeClosing(cancel);
     }
-    if (cancel) {
+    if (cancel && !force) {
         return false;
     }
 
@@ -1365,18 +1288,18 @@ bool WGacNativeWindow::RequestClose() {
         listeners[i]->AfterClosing();
     }
 
-    closed = true;
-    Hide(false);
+    if (closeWindow) closed = true;
+    HideInternal();
     return true;
 }
 
 void WGacNativeWindow::Hide(bool closeWindow) {
+    RequestClose(closeWindow);
+}
+
+void WGacNativeWindow::HideInternal() {
     ClearPressedCaptionButton();
     ClearBorderOverrideCursor(false);
-    if (closeWindow) {
-        RequestClose();
-        return;
-    }
 
     // If already hidden or never shown, just update state
     if (!visible &&
