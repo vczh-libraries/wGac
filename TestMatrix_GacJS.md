@@ -1,29 +1,31 @@
-# Test Matrix Card 2026-10-21T11:19:05.560Z
+# Test Matrix Card 2026-11-04T06:38:46.156Z
 
 ## Test Matrix
 
 | Test Item | 1st |
 | --- | --- |
-| [Linux][`/RPT`][`/MiniHttp`] | PASS |
-| [Linux][`/FCT`][`/MiniHttp`] | PASS for listed evidence; OS/hardware limitations below |
-| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over network] | PASS |
-| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over stdio `/Cli:<path>`] | PASS |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS browser host `?rvmhost`] | PASS |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over network] | PASS |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node SEA over stdio `/Cli:<path>`] | PASS |
+| Import / codegen / build / unit tests | 2026-11-04T07:40:33.645Z (passed) |
+| Codegen repeatability | 2026-11-04T07:40:33.645Z (passed) |
+| [Linux][`/RPT`][`/MiniHttp`] | 2026-11-04T07:40:33.645Z (passed) |
+| [Linux][`/FCT`][`/MiniHttp`] | 2026-11-04T07:40:33.645Z (passed) |
+| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over network] | 2026-11-04T07:05:00.308Z (fixed; passed) |
+| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over stdio `/Cli:<path>`] | 2026-11-04T07:05:00.309Z (fixed; passed) |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS browser host `?rvmhost`] | 2026-11-04T07:05:00.309Z (fixed; passed) |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over network] | 2026-11-04T07:05:00.309Z (fixed; passed) |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node SEA over stdio `/Cli:<path>`] | 2026-11-04T07:05:00.309Z (fixed; passed) |
+
+## Observations and Limitations
+
+- Firefox RPT: Home, both local shortcuts, all five buttons and modifier combinations, movement/double-click/wheels, three complete DataGrid rows and clear, Document modal, renderer replacement/live takeover and repeated shortcuts/extended buttons, confirmed File-menu close, and one exact Core-authored fatal package passed. Initial Core exited 0; fatal Core terminated with SIGABRT. Evidence: `<GacUI repo>/.github/TaskLogs/rp-20261103/firefox-rpt-*.json` and takeover screenshot. Browser events cover DOM-generated extended buttons/modifiers; native OS global shortcuts and physical hardware remain outside browser coverage.
+
+- GacJS install, import, codegen, build and root test commands exited 0. The Windows-only HTTP E2E suites were explicitly skipped, live Firefox protocol checks are recorded separately. Logs: `<GacUI repo>/.github/TaskLogs/rp-20261103/yarn-*.log`.
+- A second `yarn codegen` produced the same complete Git diff hash.
+
+- All five RVMT host modes passed repeated `RpcA你好🙂` greetings, normal close, renderer replacement/live takeover, idle-next-call host loss and blocked-delivery host loss. Non-CLI modes rejected a second host while the original kept serving. Every fatal run produced exactly one Core-authored `RemotingTest_RvmHost disconnected.` error; stdio children were reaped. Browser loss used a separate live renderer and held host Request/Response traffic; native/Node network loss used a stopped host with queued socket bytes. Stdio blocked runs confirmed the Core automation request was pending before killing its actual child. Evidence: `<GacUI repo>/.github/TaskLogs/rp-20261103/firefox-rvm-*.json`.
+
+- Firefox FCT passed two list populations/clear, independent search/rich markers, browser shortcut/mouse modifier combinations, palette retention, received clock time with changing hand pixels and correct resized canvas, DOM-synthetic Touching/TouchingList/ordinary/document selection and momentum, replacement/takeover with one new painter, and Force Exit with Core exit 0. The harness restored the Ribbon tab before checking its saved marker.
+- Additional FCT responsive/rail checks passed: 240/350/440/680×320 grow/shrink cycles, compact row-height recovery, all 24 films, eight publishers, menu/list selection agreement, independently scrolled accounts at 680×220 then 680×520, natural 32×32 account and 96×96 film image bounds, equal footer widths, all three modal close actions and fresh 240×320 openings. Default/Ember/Aurora/Default retained editor/check/choice state and the five-pixel gap; keyboard Up/Down and displayed ALT labels passed. Evidence: `<GacUI repo>/.github/TaskLogs/rp-20261103/firefox-fct.json`, `firefox-responsive-*.json/png` and `firefox-rail-*.json/png`.
 
 ## Issues Found and Fix
 
-- A rejected second browser RVM host exposed cleanup before renderer startup twice: `ResizeObserver` was undefined. Guarding renderer teardown with `rendererStarted` preserves the expected host-rejection error. The lifecycle unit regression and repeated browser-host row pass after the fix.
-
-## Observations and limitations
-
-- Linux GacJS runs in Firefox; Chromium supplies browser-level touch acquisition coverage in the Wasm matrix. Native wGac touch exclusions do not apply to either browser.
-
-- Firefox FCT: both lists add/clear; distinct Search/rich-editor markers retained across tabs and renderer takeover; local Ctrl+Q and Ctrl+Alt+Super+Q dialogs; left/middle/right and Alt/Super/Ctrl/Shift readouts. Layout subpages, retained easy-layout editor/choice through Default/Ember/Aurora/Default; responsive modal 240/350/440/680 by 320 and 680 by 220/520, reverse cycles, equal footer widths, eight account menu entries, selection/scroll and OK/Cancel/title-close. Raw Clock pixels update, hide/show and resize; close/reconnect and live takeover preserve state. Full Firefox DOM-synthetic Touching/TouchingList/ordinary-touch operations pass through the HTTP renderer; no page errors. Force Exit settles normally. Physical touch and OS global-hotkey activation are not inferred.
-
-- RPT: initial/clicked label, shortcuts, three grid rows/clear, document modal, reconnect/takeover state, normal confirmed close, and a fresh fatal run with exactly `This is a fatel error!`, one Core error packet and one browser rethrow.
-
-- All five Firefox RVM host modes: initial/edited greetings, normal shutdown/host cleanup, idle host loss and host loss during editing. Network modes reject a second host without replacing the accepted one. Native/Node process tests suspend the accepted host before editing and kill that exact process; stdio tests track the executable below its shell. Browser-host pending-RPC test holds the actual reply, confirms an automation read remains queued, stops the host and observes the read release plus exactly one Core fatal packet/browser rethrow. Renderer takeover preserves the accepted browser host.
-
-- Additional Chromium HTTP acquisition covered all five mouse buttons with no modifiers, Alt, Super, both, and Ctrl/Shift/Alt/Super. Exact down/up and modifier labels passed and the URL never changed. Firefox Playwright only accepts left/middle/right in `mouse.down`; its back/forward acquisition is not claimed. Browser global OS shortcuts and physical hardware remain unverified.
+- Firefox RVMT exposed dropped supplementary keyboard input (`🙂`): the browser accepted only one UTF-16 unit. The renderer now emits ordered units and UTF-32 Core combines surrogate pairs. The regression builds and all live Unicode host combinations passed.

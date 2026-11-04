@@ -1,85 +1,87 @@
-# Test Matrix Card 2026-10-21T11:19:05.560Z
+# Test Matrix Card 2026-11-04T06:38:46.156Z
 
 ## Environment
 
 | Field | Value |
 | --- | --- |
-| Platform / application / commit / build configuration | Ubuntu 26.04, final wGac import/sync build, Clang C++23, no-reflection |
-| Terminal name / version / profile / viewport sizes | Owned xterm-256color UTF-8 PTY: 100x30, 80x25 and 120x40; 240x40 for parallel filename comparison; GNOME Terminal 3.58.0/VTE 0.84.0 and Kitty 0.45 |
-| Input methods / desktop availability | UTF-8/CSI/SGR replay and live cell capture; Mutter compositor-generated global/local keys; external GTK X11 clipboard |
+| Platform / application / commit / build configuration | Linux GNOME Wayland; Test_TuiControlTest; GacUI upstream fc3385c2d plus task fixes; wGac official build |
+| Terminal name / version / profile / viewport sizes | GNOME Terminal 3.58 / VTE 0.84, default profile; Kitty 0.45.0, default config; 120×40, 100×30, 80×25 |
+| Input methods / desktop availability | Native Mutter keyboard/pointer, IBus Unicode composition, external GTK clipboard; unlocked desktop screenshots, AT-SPI and read-only Kitty captures; no terminal-byte replay |
 
 ## Test Matrix
 
 | Test Item | 1st |
 | --- | --- |
-| Build / resource generation / import / sync | PASS |
-| Unit tests | PASS: 28/28 provider/easy-layout cases; 13/13 native-service cases |
-| Platform launch and terminal/input capabilities | PASS with terminal limitations below |
-| Startup, platform services and teardown | PASS: fresh 100x30/80x25/120x40, modal interception, external clipboard and normal shell restoration |
-| Follow-up regression checks | PASS: runtime cell checks plus provider regressions; physical-input limits below |
-| List / TextList | PASS: retained datasets, styles and source rotation |
-| List / ListView | PASS: six views, both complete scrolled datasets, column resizing exposes full filenames |
-| List / TreeView | PASS: roots/children, source rotation and retained expansion |
-| List / BindableDataGrid | PASS: five editors, sort/filter states, source rotation and seven view requests |
-| Refresh List / TextList | PASS |
-| Refresh List / BindableTextList | PASS |
-| Refresh List / ListView | PASS |
-| Refresh List / BindableListView | PASS |
-| Refresh List / TreeView | PASS |
-| Refresh List / BindableTreeView | PASS |
-| Refresh List / BindableDataGrid | PASS: projection/header cycles, File edit and all seven views retain values |
-| Layout / Repeat / RepeatStack | PASS |
-| Layout / Repeat / RepeatFlow | PASS |
-| Layout / Repeat / SharedSize (RepeatFlow) | PASS |
-| Layout / Repeat / SharedSize (TextList) | PASS |
-| Layout / Responsive | PASS |
-| Control / Document Editor (Toolstrip) | PASS: editing/styles/alignment/modes, hyperlink/image, four explanatory file callbacks |
-| Control / TextBox / TextBox | PASS: editing, tabs, Unicode and resize |
-| Control / TextBox / TextBox (No Tab) | PASS: traversal, Unicode and retained text |
-| Control / TextBox / Document | PASS: all three editors, Unicode, selection/undo/redo, tab and resize retention |
-| Control / TextBox / Document (No Tab) | PASS: all three independent editors and Tab traversal |
-| Control / Embedded Controls | PASS |
-| Misc / Localization | PASS with POSIX formatting limitation below |
-| Compact dialog and form layout checks | PASS for captured cells at 120x40/80x25; full Font moved into the smaller viewport |
-| Misc / Dialogs / MessageDialog | PASS: seven sets, nine outputs, five icons and defaults |
-| Misc / Dialogs / ColorDialog | PASS: RGB 12/34/56 acceptance/reopen/cancel |
-| Misc / Dialogs / FontDialog | PASS: simple/full forms, effects/color retention and fixed cells; displayed appearance unverified |
-| Misc / Dialogs / Open/Save FileDialog | PASS: fixture selection, filters, multiple paths, validation and nested confirmation |
-| Misc / DatePicker | PASS: four independent dates, leap February, popup/resize retention |
-| Window Manager | PASS for observable input/frame/child operations; limitations below |
-| Live palette and clipping regression | PASS: live palette/state/child checks plus retained-popup/clipping provider regressions |
-| Exit | PASS: six fresh normal exits, canceled-then-accepted Hide/Close, restored termios and usable shell input |
+| Build / resource generation / import / sync | 2026-11-04T06:58:13.551Z (passed) |
+| Unit tests | 2026-11-04T07:40:33.645Z (passed) |
+| Platform launch and terminal/input capabilities | 2026-11-04T10:38:07.000Z passed with terminal limits |
+| Startup, platform services and teardown | 2026-11-04T10:51:28.226Z passed with recorded terminal limits |
+| Follow-up regression checks | 2026-11-04T10:38:07.001Z passed with UI limits |
+| List / TextList | 2026-11-04T10:28:48.410Z passed |
+| List / ListView | 2026-11-04T09:04:11.513Z passed |
+| List / TreeView | 2026-11-04T09:11:38.675Z passed |
+| List / BindableDataGrid | 2026-11-04T09:29:23.197Z passed |
+| Refresh List / TextList | 2026-11-04T08:51:25.432Z passed |
+| Refresh List / BindableTextList | 2026-11-04T08:51:31.649Z passed |
+| Refresh List / ListView | 2026-11-04T08:51:53.227Z passed |
+| Refresh List / BindableListView | 2026-11-04T08:51:58.035Z passed |
+| Refresh List / TreeView | 2026-11-04T08:52:02.896Z passed |
+| Refresh List / BindableTreeView | 2026-11-04T08:52:07.658Z passed |
+| Refresh List / BindableDataGrid | 2026-11-04T08:53:04.588Z passed |
+| Layout / Repeat / RepeatStack | 2026-11-04T08:57:00.225Z passed |
+| Layout / Repeat / RepeatFlow | 2026-11-04T08:57:03.455Z passed |
+| Layout / Repeat / SharedSize (RepeatFlow) | 2026-11-04T08:57:06.663Z passed |
+| Layout / Repeat / SharedSize (TextList) | 2026-11-04T08:57:09.918Z passed |
+| Layout / Responsive | 2026-11-04T08:04:26.647Z passed |
+| Control / Document Editor (Toolstrip) | 2026-11-04T09:50:22.789Z passed |
+| Control / TextBox / TextBox | 2026-11-04T08:58:11.184Z passed |
+| Control / TextBox / TextBox (No Tab) | 2026-11-04T08:58:13.631Z passed |
+| Control / TextBox / Document | 2026-11-04T08:18:55.249Z passed |
+| Control / TextBox / Document (No Tab) | 2026-11-04T08:20:00.567Z passed |
+| Control / Embedded Controls | 2026-11-04T08:23:58.273Z passed |
+| Misc / Localization | 2026-11-04T08:24:35.062Z passed |
+| Compact dialog and form layout checks | 2026-11-04T10:34:22.089Z passed with UI limits |
+| Misc / Dialogs / MessageDialog | 2026-11-04T08:28:03.416Z passed |
+| Misc / Dialogs / ColorDialog | 2026-11-04T08:32:23.662Z passed |
+| Misc / Dialogs / FontDialog | 2026-11-04T08:32:09.996Z passed |
+| Misc / Dialogs / Open/Save FileDialog | 2026-11-04T10:26:56.851Z (fixed; passed) |
+| Misc / DatePicker | 2026-11-04T09:02:24.893Z passed |
+| Window Manager | 2026-11-04T10:06:48.100Z (passed with terminal limitations) |
+| Live palette and clipping regression | 2026-11-04T09:59:18.312Z passed with UI limitations |
+| Exit | 2026-11-04T10:51:28.225Z passed; 6/6 fresh shutdown paths |
 | Packaged tutorial checks (when requested) |  |
-| Linux/macOS legacy-terminal and Kitty comparison (when applicable) | GNOME Super unavailable; same-build Kitty PASS |
+| Linux/macOS legacy-terminal and Kitty comparison (when applicable) | 2026-11-04T10:38:07.001Z completed; VTE Super limitation preserved |
 
 ## Observations and Limitations
 
-- Application behavior was driven through an owned interactive PTY using the official `./test.sh --app:tui`. Evidence is live terminal-cell output and UTF-8/CSI/SGR input, supplemented by compositor-generated keys and an independent GTK X11 clipboard client. This does not establish physical keyboard/mouse/touch hardware, displayed font/color/profile appearance, or macOS support. Packaged tutorial verification was not requested and its result remains blank.
-- Startup matched fresh 100x30, 80x25 and 120x40 viewports. A hosted shortcut modal intercepted owner interaction and dismissed normally. All four original Hide/Close buttons were canceled once (one invocation/query, zero ready notifications), then accepted on separate fresh runs. Both Stop buttons also returned normally. All six runs exited zero, restored the original terminal settings and accepted a shell input marker. The long showcase run also canceled all four buttons in sequence (4/4/0 readouts) before queued Hide exited normally. A real Kitty run closed normally too.
-- Native portal activation while another GNOME Terminal had focus produced exactly `You pressed Ctrl+Shift+Alt+Win+F8!`. Portal rejection/cancellation and registration cleanup are covered by the four GlobalShortcuts service tests; a separate desktop denial interaction is not claimed. Local Ctrl+Q and three delivered SGR mouse buttons, Alt/Ctrl/Shift modifiers, movement and both wheel axes worked. SGR has no Super bit; standalone Alt overlays and extra native terminal mouse buttons remain unavailable/unverified.
-- The provider/easy-layout selection passed 28/28 cases. It covers viewport fitting before application work, Hide/Close cancellation/notification/reentrancy, modal interception, retained live themes, tab intervals and scalar geometry, grid separators, frame/border composition, clipped wide glyph repair and timer/owner-thread behavior. These deterministic checks supplement runtime operations; they are not terminal-generated input or desktop appearance evidence. All five native service binaries passed again after the final official build (13/13 cases).
-- TextList counters/removals/styles, source rotation, tree expansions and all Refresh List model/projection/header cycles retained state. Main ListView requested all six views and compared both datasets through scrolling; widening File columns exposed matching complete filenames. Grid default From-only filtering yielded three records, To-only four, both exactly the two specified records, and disabling filters restored five. All five cell types retained edits after source rotation; the edited birthday was 8/9/1988. Refresh DataGrid's File editor retained `RefreshFile` across text mappings and all seven view requests.
-- All four Repeat pages completed the independent clear/reset/add/remove/counter sequences. Responsive View/Stack/Group reached both bounds with 4/7/4 levels and retained the editor through resize. Explicit level buttons were used; resizing was not described as automatic responsive-level switching.
-- Toolstrip checks covered selection/replacement, clipboard/cut/undo/redo, styles, alignment, preview/selectable/editable behavior, hyperlink creation/activation/canceled edit/removal, image cancellation/insertion/deletion/undo/redo and all four file callbacks. The callbacks displayed the requested format/path and their not-implemented explanation; no document persistence is claimed. An independent GTK X11 reader received the exact two document markers, and its `External你好😀` text pasted into the TUI. Both three-pane document pages retained distinct third-editor markers through tab changes and resize.
-- Message dialogs exercised seven button sets, nine outputs, five icons and default positions. RGB 12/34/56 acceptance/reopen/cancel agreed with the preview; tracker Home/End/arrow operations reached 0/255. Simple/full Font preserved effects and nested color while font metrics remained fixed. English/Chinese dialog controls, compact forms and nested validation were observed; the full Font window was moved into the smaller viewport after resizing. Custom-color persistence is unsupported. File fixtures covered asynchronous enumeration, filters, multiple exact paths, empty/missing selections, missing folders, create/overwrite cancellation and acceptance, default extensions and preserved results after cancellation. These pickers select paths, not file contents.
-- DatePicker retained four independent values, including 2024-02-29, through popups, tab changes and resize. Localization changed translated strings and preserved escaped dollars; POSIX date/number formatting remains en-US as documented.
-- All seven palette selections returned to SkyBlue, including the smaller viewport. Hidden editor content and undo/redo survived refresh. Child/grandchild movement, overlap, clipping, frame toggles and closing exposed the underlying cells correctly. Live-popup theme replacement and caption/clipping corner cases are covered by the provider tests; arbitrary caption editing and a precisely queued mid-modal refresh are not exposed by this application's terminal UI.
+- Full GacUI suite passed 95/95 files and 1965/1965 cases. After incorporating upstream direct-message-label commits 062ed2a6c/fc3385c2d, the focused provider suite passed 21/21 and metadata generation/validation exited 0. Final resource generation, import/sync and official native build passed. Evidence is under <GacUI repo>/.github/TaskLogs/rp-20261103/.
+- Fresh startup at 100×30 and 80×25 matched the terminal before resizing. Native VTE and Kitty resize checks covered 120×40 → 100×30 → 80×25 → 120×40. Hosted children/grandchildren moved, resized, overlapped and closed while the main app remained responsive; exposed cells repainted. Modal caption close was verified separately from application shutdown.
+- All six fresh final-source shutdown runs passed: direct/queued Hide, direct/queued Close and direct/queued Stop. Each Hide/Close first canceled exactly one invocation/query with ready count zero, then accepted the retry. Every run returned exit 0, matched complete pre/post stty state, restored the baseline shell display and accepted native ShellReady input. Provider regressions separately check ready notifications, reentrant close and listener removal. After testing another native application, the terminal was focused and its Exit page confirmed before targeting the queued Stop action.
+- TextList covered exact fresh 0–9 datasets, two additions through 19, continuing counters after Clear, both positional-removal results, independent checks/radios, selection and right-only source rotation. ListView covered both 29-record datasets and all six effective-Detail requests. TreeView covered all four roots and 6/4/4/4 children in both panes. Grid checks covered all five editors, sorting/ties/reset, default and changed date filters, source rotations, column resize/scroll and Unicode cell alignment.
+- All seven Refresh List pages passed their complete mutation/view/controller cycles, retained selection, scrolling/recycling and narrow repaint. The four independent Repeat models passed controller sequences, 40-item scrolling, tracker extremes, independent scroll controls, variable widths and shared widths. Responsive passed all 4/7/4 explicit levels, boundaries, retained marker and resizing.
+- All four TextBox/Document pages preserved independent CJK/supplementary markers, clipboard, selection, undo/redo, font size 1→6→1 and resize/tab state. External GTK clipboard round-trips preserved literal TAB; tab-X positions were 4,4,4,8. No-Tab pages traversed focus. Interval eight is covered by provider tests because the showcase exposes no interval control.
+- Toolstrip document checks covered editing/command availability, all four styles, foreground/background accept/cancel/reset, four alignments, Editable/Selectable/Preview, hyperlink create/edit/cancel/activate/remove, image insertion/delete/undo/redo, and two-editor retention. The four file callbacks show the expected format/path and explicitly remain unimplemented; no persistence is claimed. Embedded Controls covered the combo, RIGHT NOW modal, table, keyboard navigation and retained scroll state.
+- Localization covered twelve values, three literal-dollar forms and shared locale selection with retained date/time. POSIX formatting remains English. DatePicker retained four independent values, February 29, 2024 and year boundaries through palettes, resizing and repeated popups. Popup dismissal was confirmed by clicking outside; Escape did not dismiss the month popup.
+- MessageDialog covered all seven button sets, nine outputs, five icons and valid default positions. The final direct-label template also passed fresh English/Chinese wrapped Unicode messages and centered three-button actions at 80×25 and restored 120×40. The launch form strips literal newlines; provider tests cover explicit blank lines, and file-validation prompts supplied multiline UI coverage.
+- Color and simple/full Font dialogs passed accept/reopen/cancel, RGB edits and tracker endpoints/steps, all style flags, nested color dialogs and compact Chinese layout. Color/font/file actions aligned right with one explicit blank row above; textbox/group/list borders and aligned labels were retained. TuiFont and size 1 are intentionally read-only; custom color palette persistence is unsupported.
+- Open/Save dialogs covered all fields, filters/index/default extension, async directory enumeration, parent/subfolder navigation, single/multiple paths, empty/missing file/directory validation, disabled multi-selection, create/overwrite prompts and en-US/zh-CN compact layouts. ReadOnlyCheckBox, DereferenceLinks, NetworkButton and AddToRecent flags are inert in this provider.
+- Every palette passed mouse and Tab/Enter selection at 120×40, 80×25 and restored size, with exactly one selected radio and SkyBlue restored. Child/grandchild state, two independent document markers and undo/redo, grid edits, expanded trees and date values survived. Border/SizeBox/IconVisible/TitleBar toggles were exercised; disabled CustomizedFrame/MaximizedBox/MinimizedBox stayed unchanged. Child caption editing and queued main-radio refresh behind a modal are not exposed by the showcase; provider tests supplement those inaccessible paths. The hosted caption supports Close only.
+- Native Kitty input delivered exact Left/Middle/Right down/up and Alt readouts, movement, double-click and both wheel axes. Mouse4/Mouse5 were not delivered with or without Alt; SGR mouse has no Super field. Standalone ALT-label access and unsupported terminal key-release behavior are not claimed. Native-renderer five-button/Super coverage is separate.
+- Fresh TUI global Ctrl+Shift+Alt+Super+F8 and concurrent native FCT Ctrl+Shift+Alt+Super+Q produced their exact messages while another terminal held focus. The earlier overlapping TUI instances shared a desktop identity; repeating with one fresh TUI instance passed. Returning from document pages did not leave hidden shortcuts intercepting later dialogs. Packaged tutorials were not requested, so that row stays blank.
 
 ## Issues Found and Fix
 
-- No new TUI implementation defect was reproduced. Test-driver corrections included incremental UTF-8 decoding, waiting for theme repaint, using display-cell widths for CJK, selecting exact popup items instead of same-named tabs, focusing the document after modal dismissal and clicking inside the shorter direct Hide/Close buttons. These were harness corrections, not application fixes.
-- Preserve the GNOME local-Super limitation below. The Kitty pass does not turn it into a GNOME pass.
+- Accepted filenames disappeared after reopening/canceling a picker and repainting. Both TUI and FCT pages had bound their result list directly to the dialog output collection, which is cleared on the next ShowDialog. They now copy accepted paths. Fresh final-source TUI verification retained alpha.txt after two canceled pickers, 80×25/120×40 resize and Pink/SkyBlue template rebuilds; the fresh native FCT regression also passed.
+- Earlier upstream message-label fixes were incorporated by rebase. Focused provider tests and fresh compact dialogs verified the final direct SolidLabel implementation. Test-harness corrections—waiting for repaint, targeting the innermost action, refocusing an editor and confirming popup dismissal—are not reported as product fixes.
 
 ## Terminal Comparisons
 
-### Local Ctrl+Alt+Super+Q
+| Check | GNOME Terminal 3.58 / VTE 0.84 | Kitty 0.45.0 |
+| --- | --- | --- |
+| Native Ctrl+Q | Expected modal | Expected modal |
+| Native Ctrl+Alt+Super+Q | Not delivered; ordinary input remained live | Exact You pressed Ctrl+Alt+Win+Q! modal, both Super sides |
+| Input mechanism | Native Mutter events, no byte replay | Native Mutter events, no byte replay |
+| Resize/palettes | 120×40, 100×30, 80×25 and restored | Same sizes; retained state and fresh compact startup |
+| Normal exit | Four canceled Hide/Close requests, then accepted queued Hide; exit 0 | Separate fresh shutdown records with stty equality and native shell input |
 
-| Field | Required evidence |
-| --- | --- |
-| Host / build / configuration | Ubuntu 26.04.1, the same synchronized wGac TUI executable; UTF-8, Kitty disambiguated-key mode requested |
-| Legacy terminal attempted first | GNOME Terminal 3.58.0, VTE 0.84.0; ordinary desktop profile |
-| Operation and expected result | Mutter-generated Ctrl+Alt+Super+Q versus Ctrl+Alt+Q; distinct terminal bytes and exact local-Super dialog |
-| Legacy result | Both chords delivered hex `1b11`; Super was lost |
-| Kitty retry after failure | Kitty 0.45 delivered `1b5b3131333b313575` and `1b5b3131333b3775`; the app displayed `You pressed Ctrl+Alt+Win+Q!` |
-| Conclusion | Only Kitty distinguished these local chords in the tested setup; portal global delivery is a separate pass |
-| Evidence / cleanup | Raw hex and exact dialog above; the Kitty app returned normally with exit zero and restored modes. Physical-key and displayed-profile observations remain unverified |
+The VTE Super failure remains a terminal limitation; the Kitty pass does not replace it. Evidence includes kitty-super.*, tui-native-mouse.json, tui-startup-*.png, tui-fresh-odd-100.png, tui-fresh-even-80.png, tui-file-copy-final-*.png, tui-direct-message-*.png and tui-*-shutdown.txt under <GacUI repo>/.github/TaskLogs/rp-20261103/.
