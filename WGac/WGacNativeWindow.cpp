@@ -1160,6 +1160,9 @@ void WGacNativeWindow::SetIcon(Ptr<GuiImageData> icon) {}
 INativeWindow::WindowSizeState WGacNativeWindow::GetSizeState() { return sizeState; }
 
 void WGacNativeWindow::Show() {
+    // Activation can request Show again without a visibility transition.
+    // Repeating Opened would restart an already connected remote renderer.
+    if (visible) return;
     closed = false;
     visible = true;
 

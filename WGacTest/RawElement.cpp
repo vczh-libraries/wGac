@@ -90,6 +90,35 @@ public:
 
 TEST_FILE
 {
+	TEST_CASE(L"Showing or activating a visible native window does not reopen it")
+	{
+		if (GetHostedApplication()) return;
+		class VisibilityEvents : public INativeWindowListener
+		{
+		public:
+			vint opened = 0;
+			vint closed = 0;
+			void Opened() override { opened++; }
+			void Closed() override { closed++; }
+		} events;
+		auto service = GetCurrentController()->WindowService();
+		auto native = service->CreateNativeWindow(INativeWindow::Normal);
+		native->InstallListener(&events);
+		for (vint cycle = 1; cycle <= 2; cycle++)
+		{
+			native->Show();
+			TEST_ASSERT(native->IsVisible() && events.opened == cycle);
+			native->Show();
+			native->ShowDeactivated();
+			native->SetActivate();
+			TEST_ASSERT(native->IsVisible() && events.opened == cycle);
+			native->Hide(false);
+			TEST_ASSERT(!native->IsVisible() && events.closed == cycle);
+		}
+		native->UninstallListener(&events);
+		service->DestroyNativeWindow(native);
+	});
+
 	TEST_CASE(L"Raw factory preserves concrete identity and common state in native and hosted modes")
 	{
 		auto element = GetGuiGraphicsResourceManager()->CreateRawElement().Cast<GuiWaylandElement>();
