@@ -63,6 +63,7 @@ protected:
     bool closed;
     bool pendingFrame;
     bool hasFirstFrame;
+    bool hasCommittedBuffer;
     bool libdecorStateInitialized;
 
     bool customFrameMode;

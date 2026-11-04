@@ -2,6 +2,7 @@
 #include "WGacController.h"
 #include "WGacGacView.h"
 #include "Services/WGacResourceService.h"
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 
@@ -65,6 +66,7 @@ WGacNativeWindow::WGacNativeWindow(WaylandDisplay* _display, INativeWindow::Wind
     , closed(false)
     , pendingFrame(false)
     , hasFirstFrame(false)
+    , hasCommittedBuffer(false)
     , libdecorStateInitialized(false)
     , customFrameMode(false)
     , pressedCaptionButton(INativeWindowListener::NoDecision)
@@ -279,45 +281,9 @@ bool WGacNativeWindow::CreateLibdecorFrame()
     UpdateNativeParent();
     UpdatePlatformFrame(false);
 
-    // libdecor 0.2.2 commits visibility changes with its current content
-    // dimensions, even before the first configure. Seed a positive state so a
-    // custom/borderless window cannot emit invalid 0x0 window geometry.
-    auto initialState = libdecor_state_new(
-        lastFloatingWidth > 0 ? lastFloatingWidth : 1,
-        lastFloatingHeight > 0 ? lastFloatingHeight : 1);
-    if (!initialState)
-    {
-        display->ReportError(
-            "libdecor failed to allocate the initial platform-frame state.");
-        DestroyLibdecorFrame();
-        return false;
-    }
-    ::libdecor_frame_commit(libdecorFrame, initialState, nullptr);
-    libdecor_state_free(initialState);
-    libdecorStateInitialized = true;
-
-    // libdecor silently falls back to an undecorated implementation when no
-    // usable runtime plugin is selected. With forced CSD, a real platform
-    // plugin must translate content origin below a non-zero title bar.
-    int frameX = 0;
-    int frameY = 0;
-    libdecor_frame_translate_coordinate(
-        libdecorFrame,
-        0,
-        0,
-        &frameX,
-        &frameY);
-    if (frameY <= 0)
-    {
-        display->ReportError(
-            "The selected libdecor runtime plugin does not provide a "
-            "platform frame. Install libdecor-0-plugin-1-gtk or another "
-            "functional libdecor plugin.");
-        DestroyLibdecorFrame();
-        return false;
-    }
-
-    UpdatePlatformFrame(false);
+    // The first content state and visibility change must wait for configure.
+    // Committing a state here also maps decoration subsurfaces before the
+    // compositor has configured the parent surface.
     return true;
 }
 
@@ -482,7 +448,10 @@ void WGacNativeWindow::CommitRequestedSize()
 
     ::libdecor_frame_commit(libdecorFrame, state, nullptr);
     libdecor_state_free(state);
-    wl_surface_commit(surface);
+    if (hasCommittedBuffer)
+    {
+        wl_surface_commit(surface);
+    }
 }
 
 void WGacNativeWindow::ResizeBufferForCurrentSize()
@@ -729,6 +698,7 @@ void WGacNativeWindow::Destroy()
     visible = false;
     closed = false;
     hasFirstFrame = false;
+    hasCommittedBuffer = false;
 }
 
 void WGacNativeWindow::SetGraphicsHandler(Interface* handler)
@@ -751,6 +721,7 @@ void WGacNativeWindow::CommitBuffer()
         auto* buffer = view->GetCurrentBuffer();
         buffer->Attach(surface, 0, 0);
         buffer->DamageAll(surface);
+        hasCommittedBuffer = true;
         wl_surface_commit(surface);
     }
 }
@@ -866,8 +837,25 @@ void WGacNativeWindow::libdecor_frame_configure(
 
     ::libdecor_frame_commit(frame, state, configuration);
     libdecor_state_free(state);
-    wl_surface_commit(self->surface);
 
+    if (!self->libdecorStateInitialized)
+    {
+        // With forced CSD, a functional plugin places content below its title
+        // bar. Validate after the first state initializes that geometry, before
+        // hiding the platform frame for a custom/borderless window.
+        int frameX = 0;
+        int frameY = 0;
+        libdecor_frame_translate_coordinate(frame, 0, 0, &frameX, &frameY);
+        if (frameY <= 0)
+        {
+            self->display->ReportError(
+                "The selected libdecor runtime plugin does not provide a "
+                "platform frame. Install libdecor-0-plugin-1-gtk or another "
+                "functional libdecor plugin.");
+            std::_Exit(EXIT_FAILURE);
+        }
+        self->libdecorStateInitialized = true;
+    }
     const bool firstConfigure = !self->configured;
     const bool sizeChanged =
         self->currentWidth != width ||
@@ -921,7 +909,8 @@ void WGacNativeWindow::libdecor_frame_close(libdecor_frame* frame, void* data)
 void WGacNativeWindow::libdecor_frame_commit(libdecor_frame* frame, void* data)
 {
     auto* self = static_cast<WGacNativeWindow*>(data);
-    if (frame == self->libdecorFrame && self->surface)
+    if (frame == self->libdecorFrame && self->surface &&
+        self->configured && self->hasCommittedBuffer)
     {
         wl_surface_commit(self->surface);
     }
@@ -969,7 +958,7 @@ void WGacNativeWindow::frame_done(void* data, wl_callback* callback, uint32_t /*
 
 void WGacNativeWindow::RequestFrame()
 {
-    if (pendingFrame || !surface) return;
+    if (pendingFrame || !surface || !visible || !configured) return;
 
     pendingFrame = true;
 
@@ -984,7 +973,13 @@ void WGacNativeWindow::RequestFrame()
 
     frameCallback = wl_surface_frame(surface);
     wl_callback_add_listener(frameCallback, &frame_listener, this);
-    wl_surface_commit(surface);
+    // Paint may schedule rendering instead of attaching a buffer immediately.
+    // Let that first buffer commit carry the configure acknowledgment and frame
+    // callback together; an empty commit here would consume the acknowledgment.
+    if (hasCommittedBuffer)
+    {
+        wl_surface_commit(surface);
+    }
 }
 
 void WGacNativeWindow::OnFrame()
@@ -1326,6 +1321,10 @@ void WGacNativeWindow::HideInternal() {
         frameCallback = nullptr;
     }
     pendingFrame = false;
+
+    // A recreated role must acknowledge configure and attach its first content
+    // buffer together; an empty commit would consume that acknowledgment.
+    hasCommittedBuffer = false;
 
     if (IsPopupMode()) {
         // Reset state so next Show() works correctly
