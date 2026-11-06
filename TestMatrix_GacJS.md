@@ -12,7 +12,14 @@
 | [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over stdio `/Cli:<path>`] | 2026-11-04T07:05:00.309Z (fixed; passed) |
 | [Linux][`/RVMT`][`/MiniHttp`][GacJS browser host `?rvmhost`] | 2026-11-04T07:05:00.309Z (fixed; passed) |
 | [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over network] | 2026-11-04T07:05:00.309Z (fixed; passed) |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node SEA over stdio `/Cli:<path>`] | 2026-11-04T07:05:00.309Z (fixed; passed) |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over stdio `/Cli:<command>`] | Pending: replacement command not verified on this platform |
+
+## Current Node stdio host
+
+The replacement Node command has not been verified on Linux. Platform
+verification was explicitly skipped during the Windows maintenance task. The
+retired packaged-host row previously passed at 2026-11-04T07:05:00.309Z;
+the observations below describe that historical run, not the replacement command.
 
 ## Observations and Limitations
 
