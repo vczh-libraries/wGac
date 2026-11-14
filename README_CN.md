@@ -106,7 +106,7 @@ wGac/
 
 可检查 `<wGac repo>/Apps/*/Resources/GacBuild.log` 和 `<wGac repo>/Apps/*/Resources/Resource.xml.log/{x32,x64}/`，查看编排及编译诊断、暂存的 C++/RPC 文件、二进制缓存和 `Deploy.xml` 部署清单。成功或失败后都保留已产生的暂存文件，并由 Git 忽略；下次同步会重新复制资源目录。生成失败、必要文件缺失、合并失败或部署失败都会以非零状态终止同步。
 
-脚本还会从 `<GacUI repo>/Test/GacUISrc/CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口、RVM 初始化文件和共享的 FullControlTest 配色处理函数。RVM 入口使用的共享自动化参数头文件会复制到根目录并提交为 `<wGac repo>/SharedArguments.h`，确保全新克隆无需同级源码或临时文件即可编译。独立展示程序连接该处理函数，使标准模式和托管模式中的配色切换都能刷新现有控件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `<wGac repo>/Import-Test/`；二者都不再以本地 `<wGac repo>/WGacShared/Mini*.cpp` 副本维护。
+脚本还会从 `<GacUI repo>/Test/GacUISrc/CppTest_Tui/Main.cpp` 复制共享的 TUI GuiMain，并刷新共享的原生渲染器入口、RVM 入口、RVM 初始化文件和共享的 FullControlTest 皮肤选项和文档辅助函数。RVM 入口使用的共享自动化参数头文件会复制到根目录并提交为 `<wGac repo>/SharedArguments.h`，确保全新克隆无需同级源码或临时文件即可编译。独立展示程序通过这些辅助模块填充 `SkinItems` 并绑定各编辑器的文档事件。皮肤选项的行为会在标准模式和托管模式中刷新现有控件。MiniHTTP 自动化已经包含在导入的 GacUI 快照中，可复用的远程测试辅助代码来自 `<wGac repo>/Import-Test/`；二者都不再以本地 `<wGac repo>/WGacShared/Mini*.cpp` 副本维护。
 
 ## 编译
 
@@ -361,3 +361,9 @@ Linux 的 GacUI 目标链接 liburing 和 glibc 的 libanl，以支持异步 DNS
 `<wGac repo>/WGac/WGacNativeWindow.cpp` 中的 `WGacNativeWindow::Hide` 对隐藏和关闭请求执行相同的可取消 `BeforeClosing` 和接受关闭后的 `AfterClosing` 通知。共享 GacUI 代码在 `AfterClosing` 中关闭显式归属于所有者的提示、弹出窗口和菜单，确保它们在所有者不可见之前关闭。`HideInternal` 仅拆除原生角色并发送 `Closed`；关闭请求设置已有的关闭状态，不重复发送通知。已隐藏的弹出窗口不会再次发送关闭通知。
 
 合成器关闭弹出窗口或拆除祖先 xdg 角色时，关闭不可取消，但仍须在原生拆除前发送接受关闭通知。每个子窗口关闭后重新扫描原生子列表，因为共享 `GuiPopup::Closed` 会解除父关系。先拆除后代角色；此原生协议规则与 GacUI 显式指定控件所有者的规则分别维护。
+
+## 展示程序皮肤选项与 TUI 文档文件
+
+同步脚本将 `<GacUI repo>/Test/GacUISrc/SharedDocumentEditor.h/.cpp` 复制到两个展示程序的源码目录，并将 `<GacUI repo>/Test/GacUISrc/Generated_TuiControlTest/TuiControlTestEventHandlers.h/.cpp` 复制到 TuiControlTest。TUI 目标显式编译这两个辅助模块。FullControlTest 使用已有的生成源码清单，编译 SharedDocumentEditor 及自身的原生辅助模块。原生入口在显示窗口前填充可观察的皮肤选项集合。重复生成的单选按钮调用选项自身的行为，排队执行一次主题刷新，并保留所选对象。
+
+TUI 的私有格式读写以及 RTF/HTML 导出使用共享原生实现。显示时将图像转换为嵌入标签，序列化时恢复图像数据。文件图像标签保留路径；二进制或内存图像显示 `[Image, width x height]`。文档内嵌图像并保留未使用的样式定义。更新辅助模块时同时重新生成两个展示资源，再按照上游 TUI SOP 验证新进程读写和正常退出。

@@ -106,7 +106,7 @@ The default GacBuild mode takes a driver XML for incremental resource discovery;
 
 Inspect `<wGac repo>/Apps/*/Resources/GacBuild.log` and `<wGac repo>/Apps/*/Resources/Resource.xml.log/{x32,x64}/` for orchestration and compiler diagnostics, staged C++/RPC files, binary caches and `Deploy.xml` deployment lists. Staging artifacts are retained after success or failure and ignored by Git; the next synchronization replaces the copied resource trees. Generation, missing-artifact, merge and deployment failures stop synchronization with nonzero status.
 
-The script also copies the shared TUI GuiMain from `<GacUI repo>/Test/GacUISrc/CppTest_Tui/Main.cpp` and refreshes the shared native-renderer and RVM entry points, the RVM initializer, and the shared FullControlTest palette handler. The RVM entry point's shared automation argument header is copied to the committed root `<wGac repo>/SharedArguments.h`, so a fresh clone can build without sibling sources or temporary files. The standalone showcase attaches that handler so palette changes refresh existing controls in both standard and hosted modes. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `<wGac repo>/Import-Test/`; neither is maintained as a local `<wGac repo>/WGacShared/Mini*.cpp` copy.
+The script also copies the shared TUI GuiMain from `<GacUI repo>/Test/GacUISrc/CppTest_Tui/Main.cpp` and refreshes the shared native-renderer and RVM entry points, the RVM initializer, and the shared FullControlTest skin-item and document helpers. The RVM entry point's shared automation argument header is copied to the committed root `<wGac repo>/SharedArguments.h`, so a fresh clone can build without sibling sources or temporary files. The standalone showcase uses those helpers to populate `SkinItems` and attach each editor's document events. Selected item actions refresh existing controls in both standard and hosted modes. MiniHTTP automation is part of the imported GacUI snapshot, while reusable remoting test helpers come from `<wGac repo>/Import-Test/`; neither is maintained as a local `<wGac repo>/WGacShared/Mini*.cpp` copy.
 
 ## Building
 
@@ -346,9 +346,8 @@ installed UTF-8 locale for Core-local Unicode paths. REFRESH preserves OPFS.
 Use FCT for renderer replacement checks: refreshing a page with `rvmhost`
 also removes its accepted view-model host, so that RVMT Core must be restarted.
 
-`FullControlTestEventHandlers.h/.cpp` replaces `FullControlTestPalette.h/.cpp` in
-the synchronized FullControlTest sources. The local entry point attaches the palette
-handler and all four persistence events to each editor's own document viewer.
+The local entry point uses `<wGac repo>/Apps/FullControlTest/Source/FullControlTestEventHandlers.h/.cpp` to populate observable skin items
+and attaches all four persistence events to each editor's own document viewer.
 Private `.bin` files contain their image bytes; private save and RTF/HTML exports
 complete synchronously, including remote stream close. Synchronize the framework,
 resources and shared sources together after this protocol change.
@@ -372,3 +371,9 @@ The Linux GacUI target links liburing and glibc libanl for asynchronous DNS reso
 `WGacNativeWindow::Hide` in `<wGac repo>/WGac/WGacNativeWindow.cpp` runs the same cancellable `BeforeClosing` and accepted `AfterClosing` sequence for hide and close. Shared GacUI uses `AfterClosing` to dismiss explicitly owned tooltip, popup and menu descendants before the owner becomes invisible. `HideInternal` only tears down native roles and publishes `Closed`; requested close sets the existing closed state without repeating the callbacks. Already hidden popups do not publish another close sequence.
 
 Compositor dismissal and ancestor xdg-role teardown are mandatory: they ignore cancellation but still publish accepted-close notifications before native teardown. The native child scan is restarted after each child closes, since shared `GuiPopup::Closed` detaches its parent. Descendant roles disappear first. Keep this native role rule separate from GacUI's explicit control-relative ownership policy.
+
+## Showcase skin items and TUI document files
+
+The synchronization script copies `<GacUI repo>/Test/GacUISrc/SharedDocumentEditor.h/.cpp` into both showcase source folders and `<GacUI repo>/Test/GacUISrc/Generated_TuiControlTest/TuiControlTestEventHandlers.h/.cpp` into TuiControlTest. The TUI target explicitly compiles both helpers. FullControlTest compiles SharedDocumentEditor alongside its existing native helper through the generated-source inventory. Native composition populates the observable skin-item collections before showing each window. The repeated radios invoke item-owned actions and queue a single theme refresh, preserving selected identity.
+
+TUI private load/save and RTF/HTML export use the common native formats. Image runs become embedded labels while displayed and return to image runs for serialization. File labels retain their path; binary/memory images display `[Image, width x height]`. Files embed image data and preserve unused style definitions. Regenerate both showcase resources when updating these helpers, then follow `<GacUI repo>/.github/Jobs/DebugTuiControlTestSop.md` for fresh-process round trips and normal shutdown.

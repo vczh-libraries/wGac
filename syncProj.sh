@@ -14,6 +14,8 @@ SHARED_ARGUMENTS_SOURCE="$GACUI_DIR/Test/GacUISrc/SharedArguments.h"
 TUI_MAIN_SOURCE="$GACUI_DIR/Test/GacUISrc/CppTest_Tui/Main.cpp"
 RVM_INITIALIZER_DIR="$GACUI_DIR/Test/GacUISrc/Generated_RemoteViewModelTest"
 FCT_HANDLERS_DIR="$GACUI_DIR/Test/GacUISrc/Generated_FullControlTest"
+TUI_HANDLERS_DIR="$GACUI_DIR/Test/GacUISrc/Generated_TuiControlTest"
+DOCUMENT_HANDLERS_DIR="$GACUI_DIR/Test/GacUISrc"
 
 require_file() {
     if [[ ! -f "$1" ]]; then
@@ -109,6 +111,10 @@ require_file "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.h"
 require_file "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.cpp"
 require_file "$FCT_HANDLERS_DIR/FullControlTestEventHandlers.h"
 require_file "$FCT_HANDLERS_DIR/FullControlTestEventHandlers.cpp"
+require_file "$TUI_HANDLERS_DIR/TuiControlTestEventHandlers.h"
+require_file "$TUI_HANDLERS_DIR/TuiControlTestEventHandlers.cpp"
+require_file "$DOCUMENT_HANDLERS_DIR/SharedDocumentEditor.h"
+require_file "$DOCUMENT_HANDLERS_DIR/SharedDocumentEditor.cpp"
 require_directory "$SCRIPT_DIR/RemotingTest_Rendering_Wayland"
 require_directory "$SCRIPT_DIR/WGacCppTestRvm"
 if ! command -v perl >/dev/null 2>&1; then
@@ -148,4 +154,10 @@ cp "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.h" "$SCRIPT_DIR/Apps/Remo
 cp "$RVM_INITIALIZER_DIR/RemoteViewModelTestInitialize.cpp" "$SCRIPT_DIR/Apps/RemoteViewModelTest/Source/"
 cp "$FCT_HANDLERS_DIR/FullControlTestEventHandlers.h" "$SCRIPT_DIR/Apps/FullControlTest/Source/"
 cp "$FCT_HANDLERS_DIR/FullControlTestEventHandlers.cpp" "$SCRIPT_DIR/Apps/FullControlTest/Source/"
+cp "$TUI_HANDLERS_DIR/TuiControlTestEventHandlers.h" "$SCRIPT_DIR/Apps/TuiControlTest/Source/"
+cp "$TUI_HANDLERS_DIR/TuiControlTestEventHandlers.cpp" "$SCRIPT_DIR/Apps/TuiControlTest/Source/"
+for app in FullControlTest TuiControlTest; do
+    cp "$DOCUMENT_HANDLERS_DIR/SharedDocumentEditor.h" "$SCRIPT_DIR/Apps/$app/Source/"
+    cp "$DOCUMENT_HANDLERS_DIR/SharedDocumentEditor.cpp" "$SCRIPT_DIR/Apps/$app/Source/"
+done
 echo "Synchronized shared renderer and remote view-model entry points."
