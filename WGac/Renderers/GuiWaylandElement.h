@@ -27,6 +27,7 @@ namespace vl::presentation::elements
 	protected:
 		GuiWaylandElement() = default;
 	public:
+		~GuiWaylandElement();
 		static vint					GetElementType();
 		static GuiWaylandElement*	Create();
 
@@ -36,16 +37,13 @@ namespace vl::presentation::elements
 
 	namespace wgac
 	{
-		class GuiWaylandElementRenderer : public GuiElementRendererBase<GuiWaylandElement, GuiWaylandElementRenderer, IWGacRenderTarget>
+		class GuiWaylandElementRenderer : public GuiRawElementRendererBase<GuiWaylandElement, GuiWaylandElementRenderer, IWGacRenderTarget>
 		{
 			friend class GuiElementRendererBase<GuiWaylandElement, GuiWaylandElementRenderer, IWGacRenderTarget>;
 		protected:
-			void			InitializeInternal();
-			void			FinalizeInternal();
 			void			RenderTargetChangedInternal(IWGacRenderTarget* oldTarget, IWGacRenderTarget* newTarget);
 		public:
 			void			Render(Rect bounds) override;
-			void			OnElementStateChanged() override;
 		};
 	}
 }

@@ -2,6 +2,12 @@
 
 namespace vl::presentation::elements
 {
+	GuiWaylandElement::~GuiWaylandElement()
+	{
+		// Detach interpretor handlers while the concrete Rendering event is alive.
+		if (renderer) renderer->Finalize();
+	}
+
 	vint GuiWaylandElement::GetElementType()
 	{
 		return GetElementTypeInternal<GuiWaylandElement>();
@@ -14,14 +20,6 @@ namespace vl::presentation::elements
 
 	namespace wgac
 	{
-		void GuiWaylandElementRenderer::InitializeInternal()
-		{
-		}
-
-		void GuiWaylandElementRenderer::FinalizeInternal()
-		{
-		}
-
 		void GuiWaylandElementRenderer::RenderTargetChangedInternal(IWGacRenderTarget*, IWGacRenderTarget*)
 		{
 		}
@@ -48,10 +46,6 @@ namespace vl::presentation::elements
 			cairo_new_path(context);
 			cairo_append_path(context, path);
 			cairo_path_destroy(path);
-		}
-
-		void GuiWaylandElementRenderer::OnElementStateChanged()
-		{
 		}
 	}
 }

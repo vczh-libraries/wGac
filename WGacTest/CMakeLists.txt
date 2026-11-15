@@ -32,5 +32,7 @@ add_executable(Test_RawElement
     "RawElement.cpp"
     "../WGacShared/FullControlTestRawElement.cpp"
     "../WGacShared/FullControlTestRawElementRemote.cpp"
+    "../WGacShared/FullControlTestRawClockInterpretor.cpp"
+    "../WGacShared/FullControlTestRawClockInterpretor_Wayland.cpp"
 )
 target_link_libraries(Test_RawElement PRIVATE WGac)

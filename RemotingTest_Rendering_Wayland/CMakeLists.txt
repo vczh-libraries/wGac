@@ -8,6 +8,8 @@ add_executable(RemotingTest_Rendering_Wayland
     "Main.cpp"
     "../WGacShared/FullControlTestRawElement.cpp"
     "../WGacShared/FullControlTestRawElementRemote.cpp"
+    "../WGacShared/FullControlTestRawClockInterpretor.cpp"
+    "../WGacShared/FullControlTestRawClockInterpretor_Wayland.cpp"
 )
 target_include_directories(RemotingTest_Rendering_Wayland PRIVATE
     "../Import"

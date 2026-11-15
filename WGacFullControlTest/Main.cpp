@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
 void GuiMain()
 {
     demo::MainWindow window;
-    auto rawClockAttachment = demo::AttachFullControlTestRawElement(window.GetClockElement());
+    auto touchingAttachment = demo::AttachFullControlTestTouchingElement(window.GetTouchingElement());
     demo::AttachFctEvents<demo::DocumentEditorBase, demo::FctSkinItem>(&window);
     window.ForceCalculateSizeImmediately();
     window.MoveToScreenCenter();

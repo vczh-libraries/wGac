@@ -143,30 +143,33 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 
 `Test_RenderingLifecycle` 需要可用的 Wayland 显示连接。它验证绘制期间改变尺寸会保留正在使用的 Cairo 缓冲区，并且下一次绘制使用调整后的缓冲池。原生渲染会丢弃尺寸已过时的帧，并要求 GacUI 重新绘制。
 
-`Test_RawElement` 同样需要 Wayland。它验证标准和托管模式下的具体 Raw 工厂、带缩放和偏移的 Cairo 裁剪/状态/路径隔离、固定数据的时钟像素，以及原生远程集合成员和仅数据变化触发的重绘。原生远程生命周期检查在标准模式运行，此时渲染器持有真实原生窗口。
+`Test_RawElement` 同样需要 Wayland。它验证标准和托管模式下的具体 Raw 工厂、带缩放和偏移的 Cairo 裁剪/状态/路径隔离、解释器切换和恰好一次清理、固定数据的 Clock/Touching 像素，以及远程集合清理和仅解释器/仅数据变化触发的重绘。原生远程生命周期检查在标准模式运行，此时渲染器持有真实原生窗口。
 
 这些测试覆盖嵌套模态消息循环中的待执行任务，以及回调停止服务时对剩余任务的取消。
 图像测试覆盖禁用状态的灰度渲染、全部 256 个 Alpha 值、透明像素合成、缓存复用，以及原始图像保持不变。禁用图像使用与 Windows 和 macOS 相同的提亮灰度转换，并保持 Alpha 不变。转换后的表面按需创建，保存在图像帧持有的 `INativeImageFrameCache` 中，由使用该帧的渲染器共享。
 全局快捷键测试使用隔离的 D-Bus 会话（依赖安装脚本包含 `dbus-daemon`）和模拟 Portal，覆盖应用注册、提前到达的响应、修饰键编码、多快捷键、UI 线程触发、重复或无效注册、拒绝、取消和注销。测试不会授予桌面权限，也不能代替真实桌面验证。
 
-## 自定义 Cairo 绘制和 Raw Clock
+## 自定义 Cairo 绘制、Raw Clock 和 Touching
 
-`<Raw/>` 是 GacUI 本地和远程图形应用进行自定义绘制的标准首选方式。在 XML 中或通过 `GuiRawElementBase` 设置 `Id` 和 `Data`，为所属组合提供合适的范围或最小尺寸，然后在 C++ 中绑定平台绘制逻辑。TUI 不支持 `<Raw/>`；其资源管理器会拒绝创建，不会替换成其他图形元素。
+`<Raw/>` 是本地、托管和远程图形应用进行自定义绘制的推荐方式。`GuiRawElementBase` 向 C++ 和 Workflow 暴露 `Id`、`Interpretor`、`Data` 和 `SetInterpretorAndData`。应用 ID 与可选的注册绘制器名称互相独立。TUI 不支持 Raw 绘制。
 
-`<Raw>` 选择 `<wGac repo>/WGac/Renderers/GuiWaylandElement.h` 中的 `vl::presentation::elements::GuiWaylandElement`。它继承 `GuiRawElementBase`，并通过 C++ `Rendering` 事件提供元素、绘制范围和借用的 `cairo_t*`。每次回调都应使用本次提供的上下文，不得缓存或销毁它、保留其底层 surface，或自行开始、结束、提交一帧。上下文只在当前绘制过程有效，每次绘制后都会销毁；渲染目标的绑定具有独立的生命周期。首次绑定、延迟订阅和目标替换不需要缓存 Cairo 资源或增加目标变化事件。
+`<Raw>` 创建 `<wGac repo>/WGac/Renderers/GuiWaylandElement.h` 中的 `vl::presentation::elements::GuiWaylandElement`。`Rendering` 事件提供元素、当前逻辑范围和借用的 `cairo_t*`。上下文仅在回调中有效，不得保留或销毁它及其 surface。提供者已经应用裁剪、托管偏移和 DPI 缩放。渲染器将绘制限制在元素范围内，并在事件前后保存和恢复 Cairo 状态与当前路径。Raw 元素没有固有最小尺寸。
 
-绘制沿用现有逻辑坐标、DPI 缩放、托管窗口偏移和裁剪。Raw 渲染器将绘制限制在元素范围内，并恢复调用者的 Cairo 状态和当前路径。改变 `Data` 请求重绘；只改变 `Id` 不请求重绘；重复赋相同值没有效果。Raw 元素没有固有最小尺寸。远程协议仍仅传输数值渲染器 ID、应用字符串 ID 和字符串数据，不含 Wayland 句柄。
+`GuiWaylandElementRenderer` 使用公共 `GuiRawElementRendererBase`。后端初始化后通过当前图形资源管理器注册工厂；托管管理器转发到同一个原生注册表。每个渲染器拥有独立解释器，解释器借用元素并持有可解除的事件令牌。替换或清空名称会终结旧实例。未知名称保留但不安装实例，之后注册工厂也不会自动重试。独立的手动处理器不受影响。仅数据、仅 ID 或相同赋值不会重装未改变名称的解释器。组合赋值在初始化前暴露两个新值。具体元素在事件尚存时终结解释器，基类析构不会重复终结。重建目标保留解释器。
 
-Core 持有这些字符串，并在帧中批量发送变化；单独修改 `Id` 要等到下一次由其他原因触发的帧才会传到渲染器。原生远程绘制在渲染器进程中进行，`GuiRemoteRendererSingle` 通过当前资源管理器创建 `GuiWaylandElement`。订阅 `RawElementInstalled`、`RawElementChanged` 和 `RawElementUninstalled`，并通过 `GetRawElements()` 支持延迟绑定。安装事件发生在首次描述符和渲染目标设置之前，此时字符串为空；描述符先应用两个字段，再发送一次变化通知。卸载回调执行期间元素仍在集合中，之后才解除渲染目标绑定。调整尺寸和重建目标不会改变元素身份。GacJS 可以通过页面自己的绘制逻辑显示相同状态；Raw 协议不传输 Cairo 回调或绘制后的像素。
+修改 `Interpretor` 或 `Data` 请求重绘；仅修改 `Id` 不请求重绘。Core 在帧中把三个字符串与数值渲染器 ID 一同放入 `ElementDesc_Raw`。Core 与渲染器必须使用匹配的协议快照。描述符应用全部三个应用字符串后发送一次 `RawElementChanged`，相同更新不发送事件。没有所属组合时，仅解释器或仅数据更新仍会重绘。描述符不传输原生句柄或像素帧。
 
-FullControlTest 时钟辅助代码由 `<wGac repo>/WGacShared/FullControlTestRawElement*.h/.cpp` 本地维护，直接编译进 FCT 和原生渲染器目标，不给仅依赖 GacUI 的共享测试库增加依赖，也不会被 `syncProj.sh` 覆盖。可复用元素属于 WGac 库。远程入口钩子的源文件是 `<GacUI repo>/Test/GacUISrc/RemotingTest_Rendering_Win32/GuiMain.cpp`，由同步脚本复制；Windows 时钟辅助代码不会被复制或编译。
+Clock 使用 `Interpretor="FullControlTest::Clock"`，保留 `Id="FullControlTest.Clock"`。Workflow 计时器提供 `HH:mm:ss`；绘制时不读取本地时间，也不启动新计时器。同步将 `<GacUI repo>/Test/GacUISrc/Generated_FullControlTest/` 的可移植 `FullControlTestRawClockInterpretor.h/.cpp` 两个文件复制到 `<wGac repo>/WGacShared/`，并适配框架头文件引用。上游 `VCZH_MSVC` 条件排除 Linux 上的 Windows 实现。独立的本地文件 `<wGac repo>/WGacShared/FullControlTestRawClockInterpretor_Wayland.cpp` 实现 Cairo 绘制原语和 `IGuiPlugin`。插件在与控制器相关的加载阶段注册工厂，早于窗口构造和远程消息处理。两个入口都无需显式注册 Clock。
 
-时钟仅绘制 ID 为 `FullControlTest.Clock` 且数据为有效 `HH:mm:ss` 的元素。计时器和 240×240 最小尺寸由上游 XML 定义。返回的附件应保留到窗口绘制结束；集合附件必须先于远程渲染器销毁。集合附件按元素身份管理，在协议处理前订阅，枚举现有元素以支持延迟订阅，并处理 ID 变化和卸载。断开连接后保留最后画面，直到实际清理。
+可移植基类和 Wayland 插件直接作为源文件各编译一次，分别加入 `Test_FullControlTest`、`RemotingTest_Rendering_Wayland` 和 `Test_RawElement`。直接链接避免无引用符号的插件注册被丢弃。应用专用绘制器不属于通用平台库。渲染器标准入口和参数解析继续从 GacUI 同步。
 
-上游 Raw 契约改变后，先用 CodePack 重新生成 `<GacUI repo>/Release`，再依次运行 `./import.sh`、`./syncProj.sh`、`./build.sh`；导入脚本不会重新生成过时的发布文件。再次同步并确认本地辅助代码和 CMake 引用未被覆盖。资源元数据必须与上游 XML 和库匹配，需要更新时遵循 GacUI 所属的生成流程。
+Touching 保留 `Id="FullControlTest.Touching"`，解释器为空。`<wGac repo>/WGacShared/FullControlTestRawElement.h/.cpp` 提供 `AttachFullControlTestTouchingElement`，本地窗口保留附件直到窗口销毁之前。数据格式为 `centerX,centerY,axisX,axisY,count`，后接 `count` 组 `pointId,x,y`。轴对填充 SkyBlue 的 160×100 矩形执行旋转和等比缩放，接触点显示半径 16 的黄色圆环；二者都遵守当前范围和裁剪。
 
-运行 `./test.sh --app:fct`，再用 `--hosted` 重复。通过自动化选择 Misc / Raw Clock，验证无需输入即可看到指针跳动，以及调整尺寸、切换标签、更新配色、关闭并重新打开。远程路径运行 `./test_core.sh --app:fct --protocol:minihttp` 和 `./test.sh --app:renderer`；Core 自动化端口为 8888，渲染器为 8889。验证关闭后替换、使用 `--port:8890` 并发接管、断连/致命错误画面保留，以及 RPT 渲染器流程。除自动化状态外，还需检查原生截图或绘制缓冲区，并最终停止所有测试进程。浏览器 HTTP 和真实 Wasm 验证遵循上游任务中独立的 GacJS 流程。
+本地维护的 `<wGac repo>/WGacShared/FullControlTestRawElementRemote.h/.cpp` 适配器仅附加 Touching。它订阅安装、变化和移除事件，枚举已有元素支持延迟附加，并按元素身份协调以避免重复处理器。ID 改变会移除旧附件。适配器必须先于渲染器销毁；断开后保留的画面继续绘制直到清理。Wayland 原生触摸采集尚不支持，本地及渲染器的自动化适配器也不提供点命令状态。本地用固定数据夹具，远程通过 Core 自动化发送合成 `!PointDown`、`!PointUpdate`、`!PointUp` 验证。
 
+上游 Raw 契约变化后，先通过 GacUI 所属流程生成发布和元数据输入，再运行 `./import.sh`、`./syncProj.sh`、`./build.sh`。导入不会修复过时输入。重复同步和增量构建，再运行 `./build.sh --rebuild` 验证可复现性。同步必须保留本地 Wayland 辅助代码及直接源文件清单。
+
+专项应用验证运行 `./test.sh --app:fct`，再用 `--hosted` 重复，仅访问 Misc / Raw Clock 和 Misc / Touching。检查时钟数据和实际指针变化、调整尺寸、切换页面、刷新配色、矩形和接触点像素及裁剪。本地展示与 Core 分开运行，因为两者都使用自动化端口 8888。远程先运行 `./test_core.sh --app:fct --protocol:minihttp`，再运行 `./test.sh --app:renderer --port:8889`。验证渲染器替换和另一个使用 8890 端口的渲染器接管，包括 Clock 名称/数据重放和 Touching 清理。同时检查 Controls/Dom、IO 状态和原生截图或绘制缓冲区。单独记录不可执行的显示检查，并停止所有自有进程。
 
 ## 运行和自动化
 
