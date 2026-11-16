@@ -5,6 +5,7 @@
 #include <wayland-client.h>
 #include <string>
 #include <mutex>
+#include <unordered_set>
 
 namespace vl {
 namespace presentation {
@@ -27,6 +28,10 @@ private:
     wl_data_source* current_source = nullptr;
     std::string pending_text;
     Ptr<INativeImage> pending_image;
+    Ptr<INativeClipboardReader> local_clipboard;
+    std::string local_mime;
+    vuint64_t selection_version = 0;
+    std::unordered_set<wl_data_offer*> local_offers;
 
     std::mutex mutex;
 

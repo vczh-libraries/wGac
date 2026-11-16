@@ -1,8 +1,10 @@
 #include "GacUI.h"
 #include "WGacGacView.h"
+#include "WGacNativeWindow.h"
 #include <cstring>
 
 using namespace vl;
+using namespace vl::presentation;
 using namespace vl::presentation::wayland;
 
 namespace
@@ -46,6 +48,28 @@ namespace
 
 TEST_FILE
 {
+    TEST_CASE(L"A delayed tooltip with an unmapped popup parent preserves the connection")
+    {
+        WaylandDisplay display;
+        TEST_ASSERT(display.Connect());
+        {
+            WGacNativeWindow parent(&display, INativeWindow::WindowMode::Menu);
+            WGacNativeWindow tooltip(&display, INativeWindow::WindowMode::Tooltip);
+            TEST_ASSERT(parent.Create());
+            TEST_ASSERT(tooltip.Create());
+            tooltip.SetParent(&parent);
+
+            // A menu can close before its tooltip's delayed Show callback runs.
+            // The parent has no xdg role, so the tooltip must not create one.
+            tooltip.Show();
+            TEST_ASSERT(wl_display_roundtrip(display.GetDisplay()) >= 0);
+            TEST_ASSERT(wl_display_roundtrip(display.GetDisplay()) >= 0);
+            TEST_ASSERT(wl_display_get_error(display.GetDisplay()) == 0);
+            tooltip.Hide(false);
+        }
+        TEST_ASSERT(wl_display_roundtrip(display.GetDisplay()) >= 0);
+    });
+
     TEST_CASE(L"Resizing during a draw retains its buffer and Cairo backing memory")
     {
         ShmConnection connection;
@@ -84,6 +108,10 @@ TEST_FILE
         view.StopRendering();
         TEST_ASSERT(static_cast<uint32_t*>(view.GetCurrentBuffer()->GetData())[0] == 0xFF0000FF);
     });
+}
+
+void GuiMain()
+{
 }
 
 int main(int argc, char* argv[])

@@ -538,19 +538,20 @@ bool WGacNativeWindow::CreateXdgSurface()
         return false;
     }
 
+    // The menu may have closed before this delayed tooltip callback runs.
+    // Do not create an xdg_surface unless its popup role can be constructed:
+    // destroying a role-less xdg_surface is a compositor protocol error.
+    auto parentXdgSurface = parentWindow->GetXdgSurface();
+    if (!parentXdgSurface)
+    {
+        return false;
+    }
+
     xdgSurface = xdg_wm_base_get_xdg_surface(display->GetXdgWmBase(), surface);
     if (!xdgSurface) {
         return false;
     }
     xdg_surface_add_listener(xdgSurface, &xdg_surface_listener_, this);
-
-    auto parentXdgSurface = parentWindow->GetXdgSurface();
-    if (!parentXdgSurface)
-    {
-        xdg_surface_destroy(xdgSurface);
-        xdgSurface = nullptr;
-        return false;
-    }
 
     xdg_positioner* positioner =
         xdg_wm_base_create_positioner(display->GetXdgWmBase());

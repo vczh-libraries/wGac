@@ -132,16 +132,19 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 
 编译后运行原生服务回归测试：
 
+`Test_ClipboardService` 验证没有桌面输入序列号时，进程内文本、富文档和图像仍可复制读取，以及合成器清空选择时会撤销尚未发布的本地副本。普通原生复制还会向 Wayland 发布文本和图像格式；富文档对象仅保留在持有剪贴板的进程内。
+
 ```bash
 ./build/WGacTest/bin/Test_AsyncService /C
 ./build/WGacTest/bin/Test_ImageService /C
+./build/WGacTest/bin/Test_ClipboardService /C
 ./build/WGacTest/bin/Test_GlobalShortcuts /C
 ./build/WGacTest/bin/Test_RenderingLifecycle /C
 ./build/WGacTest/bin/Test_RawElement /C
 ./build/WGacTest/bin/Test_RawElement /C --hosted
 ```
 
-`Test_RenderingLifecycle` 需要可用的 Wayland 显示连接。它验证绘制期间改变尺寸会保留正在使用的 Cairo 缓冲区，并且下一次绘制使用调整后的缓冲池。原生渲染会丢弃尺寸已过时的帧，并要求 GacUI 重新绘制。
+`Test_RenderingLifecycle` 需要可用的 Wayland 显示连接。它验证绘制期间改变尺寸会保留正在使用的 Cairo 缓冲区，并且下一次绘制使用调整后的缓冲池。它还验证延迟创建工具提示时，如果父弹出窗口已没有映射的角色，合成器连接仍保持可用。原生渲染会丢弃尺寸已过时的帧，并要求 GacUI 重新绘制。
 
 `Test_RawElement` 同样需要 Wayland。它验证标准和托管模式下的具体 Raw 工厂、带缩放和偏移的 Cairo 裁剪/状态/路径隔离、解释器切换和恰好一次清理、固定数据的 Clock/Touching 像素，以及远程集合清理和仅解释器/仅数据变化触发的重绘。原生远程生命周期检查在标准模式运行，此时渲染器持有真实原生窗口。
 

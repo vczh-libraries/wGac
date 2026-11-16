@@ -1,6 +1,7 @@
 #include "WGacClipboardService.h"
 #include "../Wayland/WaylandDisplay.h"
 #include "../Wayland/WaylandSeat.h"
+#include "../WGacController.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
@@ -147,6 +148,23 @@ namespace {
     }
 }
 
+// Retain private document/image objects while this process owns the selection.
+// Reading our own copy must not depend on a compositor roundtrip or input serial.
+class WGacClipboardSnapshot : public Object, public INativeClipboardReader
+{
+public:
+    Nullable<WString> text;
+    Ptr<DocumentModel> document;
+    Ptr<INativeImage> image;
+
+    bool ContainsText() override { return text; }
+    WString GetText() override { return text ? text.Value() : WString(); }
+    bool ContainsDocument() override { return document; }
+    Ptr<DocumentModel> GetDocument() override { return document; }
+    bool ContainsImage() override { return image; }
+    Ptr<INativeImage> GetImage() override { return image; }
+};
+
 // WGacClipboardWriter implementation
 class WGacClipboardWriter : public Object, public INativeClipboardWriter
 {
@@ -158,6 +176,7 @@ private:
     bool hasText = false;
     bool hasDocument = false;
     bool hasImage = false;
+    bool submitted = false;
 
 public:
     WGacClipboardWriter(WGacClipboardService* _service) : service(_service) {}
@@ -182,12 +201,19 @@ public:
 
     bool Submit() override
     {
-        auto* display = GetWaylandDisplay();
-        if (!display || !display->GetDataDeviceManager()) {
-            return false;
+        if (submitted) return false;
+        submitted = true;
+        auto snapshot = Ptr(new WGacClipboardSnapshot);
+        if (hasText) snapshot->text = text;
+        if (hasDocument) {
+            snapshot->document = document;
+            ModifyDocumentForClipboard(document);
+            if (!hasText) snapshot->text = document->GetTextForReading(L"\n");
+            if (!hasImage) snapshot->image = GetImageFromSingleImageDocument(document);
         }
-
-        std::lock_guard<std::mutex> lock(service->mutex);
+        if (hasImage) snapshot->image = image;
+        auto* display = GetWaylandDisplay();
+        std::unique_lock<std::mutex> lock(service->mutex);
 
         // Destroy previous source
         if (service->current_source) {
@@ -195,46 +221,36 @@ public:
             service->current_source = nullptr;
         }
 
-        // Create new data source
-        service->current_source = wl_data_device_manager_create_data_source(
-            display->GetDataDeviceManager());
-        if (!service->current_source) {
-            return false;
-        }
+        service->local_clipboard = snapshot;
+        service->pending_text = WStringToUtf8(snapshot->GetText());
+        service->pending_image = snapshot->image;
+        service->local_mime = "application/x-gacui-selection-" + std::to_string(getpid())
+            + "-" + std::to_string(++service->selection_version);
 
-        wl_data_source_add_listener(service->current_source, &data_source_listener, service);
-
-        // Determine what to offer
-        if (hasText) {
-            service->pending_text = WStringToUtf8(text);
-            wl_data_source_offer(service->current_source, TEXT_MIME_UTF8);
-            wl_data_source_offer(service->current_source, TEXT_MIME_PLAIN);
-            wl_data_source_offer(service->current_source, TEXT_MIME_UTF8_ALT);
-            wl_data_source_offer(service->current_source, TEXT_MIME_STRING);
-        } else if (hasDocument) {
-            service->pending_text = WStringToUtf8(document->GetTextForReading(L"\n"));
-            wl_data_source_offer(service->current_source, TEXT_MIME_UTF8);
-            wl_data_source_offer(service->current_source, TEXT_MIME_PLAIN);
-        }
-
-        if (hasImage) {
-            service->pending_image = image;
-            wl_data_source_offer(service->current_source, IMAGE_MIME_PNG);
-        }
-
-        // Set selection - use most recent input serial from the seat
-        auto* data_device = display->GetDataDevice();
-        if (data_device) {
-            uint32_t serial = 0;
-            if (display->GetWaylandSeat()) {
-                serial = display->GetWaylandSeat()->GetLastInputSerial();
+        // Automation has no compositor input serial. Keep its copy process-local;
+        // ordinary input additionally publishes the standard external formats.
+        auto serial = display && display->GetWaylandSeat()
+            ? display->GetWaylandSeat()->GetLastInputSerial() : 0;
+        if (serial && display->GetDataDeviceManager() && display->GetDataDevice()) {
+            service->current_source = wl_data_device_manager_create_data_source(display->GetDataDeviceManager());
+            CHECK_ERROR(service->current_source, L"Failed to create the Wayland clipboard source.");
+            wl_data_source_add_listener(service->current_source, &data_source_listener, service);
+            wl_data_source_offer(service->current_source, service->local_mime.c_str());
+            if (snapshot->ContainsText()) {
+                wl_data_source_offer(service->current_source, TEXT_MIME_UTF8);
+                wl_data_source_offer(service->current_source, TEXT_MIME_PLAIN);
+                wl_data_source_offer(service->current_source, TEXT_MIME_UTF8_ALT);
+                wl_data_source_offer(service->current_source, TEXT_MIME_STRING);
             }
-            wl_data_device_set_selection(data_device, service->current_source, serial);
+            if (snapshot->ContainsImage()) wl_data_source_offer(service->current_source, IMAGE_MIME_PNG);
+            wl_data_device_set_selection(display->GetDataDevice(), service->current_source, serial);
             display->Flush();
-            return true;
         }
-
-        return false;
+        lock.unlock();
+        if (auto* controller = GetWGacController()) {
+            controller->CallbackService()->Invoker()->InvokeClipboardUpdated();
+        }
+        return true;
     }
 };
 
@@ -400,10 +416,14 @@ void WGacClipboardService::data_device_selection(void* data, wl_data_device* /*d
 
     // Destroy old offer
     if (self->current_offer && self->current_offer != offer) {
+        self->local_offers.erase(self->current_offer);
         wl_data_offer_destroy(self->current_offer);
     }
 
     self->current_offer = offer;
+    if ((offer && !self->local_offers.contains(offer)) || (!offer && !self->current_source)) {
+        self->local_clipboard = nullptr;
+    }
     // Note: offer_has_text/offer_has_image were already set in data_offer_offer
     // but we need to reset them if offer is null
     if (!offer) {
@@ -415,10 +435,12 @@ void WGacClipboardService::data_device_selection(void* data, wl_data_device* /*d
 }
 
 // Data offer listener callbacks
-void WGacClipboardService::data_offer_offer(void* data, wl_data_offer* /*offer*/, const char* mime_type)
+void WGacClipboardService::data_offer_offer(void* data, wl_data_offer* offer, const char* mime_type)
 {
     auto* self = static_cast<WGacClipboardService*>(data);
     std::lock_guard<std::mutex> lock(self->mutex);
+
+    if (mime_type == self->local_mime) self->local_offers.insert(offer);
 
     if (IsSupportedTextMime(mime_type)) {
         self->offer_has_text = true;
@@ -479,11 +501,12 @@ void WGacClipboardService::data_source_cancelled(void* data, wl_data_source* sou
     auto* self = static_cast<WGacClipboardService*>(data);
     std::lock_guard<std::mutex> lock(self->mutex);
 
-    if (self->current_source == source) {
+    if (source && self->current_source == source) {
         wl_data_source_destroy(source);
         self->current_source = nullptr;
         self->pending_text.clear();
         self->pending_image = nullptr;
+        self->local_clipboard = nullptr;
     }
 }
 
@@ -526,6 +549,8 @@ void WGacClipboardService::Cleanup()
     }
     pending_text.clear();
     pending_image = nullptr;
+    local_clipboard = nullptr;
+    local_offers.clear();
 }
 
 void WGacClipboardService::Initialize()
@@ -538,6 +563,8 @@ void WGacClipboardService::Initialize()
 
 Ptr<INativeClipboardReader> WGacClipboardService::ReadClipboard()
 {
+    std::lock_guard<std::mutex> lock(mutex);
+    if (local_clipboard) return local_clipboard;
     return Ptr(new WGacClipboardReader(this));
 }
 

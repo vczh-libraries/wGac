@@ -132,16 +132,19 @@ The root CMake project uses C++23 and builds:
 
 Run the native service regressions after building:
 
+`Test_ClipboardService` covers process-local text, rich document and image readback without a desktop input serial, and retirement of an unpublished copy when the compositor clears the selection. Ordinary native copy also publishes text/image formats to Wayland; rich document objects stay within the owning process.
+
 ```bash
 ./build/WGacTest/bin/Test_AsyncService /C
 ./build/WGacTest/bin/Test_ImageService /C
+./build/WGacTest/bin/Test_ClipboardService /C
 ./build/WGacTest/bin/Test_GlobalShortcuts /C
 ./build/WGacTest/bin/Test_RenderingLifecycle /C
 ./build/WGacTest/bin/Test_RawElement /C
 ./build/WGacTest/bin/Test_RawElement /C --hosted
 ```
 
-`Test_RenderingLifecycle` requires an available Wayland display. It checks that resizing during a draw preserves the active Cairo buffer and that the next draw uses the resized pool. Native rendering discards an obsolete-sized frame and asks GacUI to render again.
+`Test_RenderingLifecycle` requires an available Wayland display. It checks that resizing during a draw preserves the active Cairo buffer and that the next draw uses the resized pool. It also verifies that a delayed tooltip whose popup parent has no mapped role leaves the compositor connection usable. Native rendering discards an obsolete-sized frame and asks GacUI to render again.
 
 `Test_RawElement` also requires Wayland. It checks the concrete raw factory in standard and hosted modes, Cairo clipping/state/path isolation with scale and offsets, interpretor transitions and exactly-once cleanup, fixed-data Clock/Touching pixels, and remote collection cleanup plus interpretor-only/data-only repaint. Native remote lifecycle checks run in standard mode, where the renderer owns a real native window.
 
