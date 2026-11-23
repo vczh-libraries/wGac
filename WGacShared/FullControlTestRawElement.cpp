@@ -45,9 +45,11 @@ namespace demo
 			}
 			cairo_close_path(context);
 			cairo_set_source_rgb(context, 135.0 / 255, 206.0 / 255, 235.0 / 255);
-			cairo_fill(context);
-			cairo_set_source_rgb(context, 1, 1, 0);
+			cairo_fill_preserve(context);
 			cairo_set_line_width(context, 2);
+			cairo_set_source_rgb(context, 0, 0, 0);
+			cairo_stroke(context);
+			cairo_set_source_rgb(context, 1, 136.0 / 255, 0);
 			for (vint i = 5; i < values.Count(); i += 3)
 			{
 				cairo_arc(context, bounds.x1 + (vint)values[i + 1], bounds.y1 + (vint)values[i + 2], 16, 0, 6.28318530717958647692);

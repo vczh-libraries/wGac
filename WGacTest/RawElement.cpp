@@ -398,6 +398,8 @@ TEST_FILE
 		// At three o'clock the cyan hour points right and the yellow second points up.
 		TEST_ASSERT(pixels[120 * stride + 170] == 0xFF00FFFF);
 		TEST_ASSERT(pixels[50 * stride + 120] == 0xFFFFFF00);
+		auto outline = pixels[50 * stride + 121];
+		TEST_ASSERT((outline >> 24) > 0 && (outline & 0xFFFFFF) == 0);
 		TEST_ASSERT(pixels[160 * stride + 80] == 0);
 		element->SetData(L"06:30:45");
 		TEST_ASSERT(draw() != three && draw() != blank);
@@ -444,8 +446,9 @@ TEST_FILE
 		element->SetData(L"120,120,1,0,1,7,40,40");
 		auto initial = draw();
 		TEST_ASSERT(initial != blank);
-		TEST_ASSERT(CountPixels(target.surface, { 50,80,210,180 }, 0xFF87CEEB) == 16000);
-		TEST_ASSERT(CountPixels(target.surface, { 30,30,70,70 }, 0xFFFFFF00) > 50);
+		TEST_ASSERT(CountPixels(target.surface, { 51,81,209,179 }, 0xFF87CEEB) == 158 * 98);
+		TEST_ASSERT(CountPixels(target.surface, { 51,79,209,81 }, 0xFF000000) == 158 * 2);
+		TEST_ASSERT(CountPixels(target.surface, { 30,30,70,70 }, 0xFFFF8800) > 50);
 		// Removing the renderer-owned painter must leave the separate manual handler intact.
 		element->SetInterpretor(L"FullControlTest::Clock");
 		TEST_ASSERT(draw() == initial);
@@ -457,10 +460,10 @@ TEST_FILE
 		// Translation and a quarter-turn at half size: rectangle is now 50 by 80.
 		element->SetData(L"100,90,0,0.5,2,7,180,180,8,30,180");
 		TEST_ASSERT(draw() != initial);
-		TEST_ASSERT(CountPixels(target.surface, { 85,60,135,140 }, 0xFF87CEEB) == 4000);
-		TEST_ASSERT(CountPixels(target.surface, { 170,170,210,210 }, 0xFFFFFF00) > 50);
-		TEST_ASSERT(CountPixels(target.surface, { 20,170,60,210 }, 0xFFFFFF00) > 50);
-		TEST_ASSERT(CountPixels(target.surface, { 30,30,70,60 }, 0xFFFFFF00) == 0);
+		TEST_ASSERT(CountPixels(target.surface, { 86,61,134,139 }, 0xFF87CEEB) == 48 * 78);
+		TEST_ASSERT(CountPixels(target.surface, { 170,170,210,210 }, 0xFFFF8800) > 50);
+		TEST_ASSERT(CountPixels(target.surface, { 20,170,60,210 }, 0xFFFF8800) > 50);
+		TEST_ASSERT(CountPixels(target.surface, { 30,30,70,60 }, 0xFFFF8800) == 0);
 		element->SetData(L"0,0,1,0,0");
 		draw({ 20,30,60,70 });
 		TEST_ASSERT(CountPixels(target.surface, { 0,0,300,300 }, 0xFF87CEEB) == 1600);

@@ -162,11 +162,11 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 
 修改 `Interpretor` 或 `Data` 请求重绘；仅修改 `Id` 不请求重绘。Core 在帧中把三个字符串与数值渲染器 ID 一同放入 `ElementDesc_Raw`。Core 与渲染器必须使用匹配的协议快照。描述符应用全部三个应用字符串后发送一次 `RawElementChanged`，相同更新不发送事件。没有所属组合时，仅解释器或仅数据更新仍会重绘。描述符不传输原生句柄或像素帧。
 
-Clock 使用 `Interpretor="FullControlTest::Clock"`，保留 `Id="FullControlTest.Clock"`。Workflow 计时器提供 `HH:mm:ss`；绘制时不读取本地时间，也不启动新计时器。同步将 `<GacUI repo>/Test/GacUISrc/Generated_FullControlTest/` 的可移植 `FullControlTestRawClockInterpretor.h/.cpp` 两个文件复制到 `<wGac repo>/WGacShared/`，并适配框架头文件引用。上游 `VCZH_MSVC` 条件排除 Linux 上的 Windows 实现。独立的本地文件 `<wGac repo>/WGacShared/FullControlTestRawClockInterpretor_Wayland.cpp` 实现 Cairo 绘制原语和 `IGuiPlugin`。插件在与控制器相关的加载阶段注册工厂，早于窗口构造和远程消息处理。两个入口都无需显式注册 Clock。
+时钟在皮肤背景上绘制，表盘、小时刻度和指针都有三像素宽的黑色描边。Clock 使用 `Interpretor="FullControlTest::Clock"`，保留 `Id="FullControlTest.Clock"`。Workflow 计时器提供 `HH:mm:ss`；绘制时不读取本地时间，也不启动新计时器。同步将 `<GacUI repo>/Test/GacUISrc/Generated_FullControlTest/` 的可移植 `FullControlTestRawClockInterpretor.h/.cpp` 两个文件复制到 `<wGac repo>/WGacShared/`，并适配框架头文件引用。上游 `VCZH_MSVC` 条件排除 Linux 上的 Windows 实现。独立的本地文件 `<wGac repo>/WGacShared/FullControlTestRawClockInterpretor_Wayland.cpp` 实现 Cairo 绘制原语和 `IGuiPlugin`。插件在与控制器相关的加载阶段注册工厂，早于窗口构造和远程消息处理。两个入口都无需显式注册 Clock。
 
 可移植基类和 Wayland 插件直接作为源文件各编译一次，分别加入 `Test_FullControlTest`、`RemotingTest_Rendering_Wayland` 和 `Test_RawElement`。直接链接避免无引用符号的插件注册被丢弃。应用专用绘制器不属于通用平台库。渲染器标准入口和参数解析继续从 GacUI 同步。
 
-Touching 保留 `Id="FullControlTest.Touching"`，解释器为空。`<wGac repo>/WGacShared/FullControlTestRawElement.h/.cpp` 提供 `AttachFullControlTestTouchingElement`，本地窗口保留附件直到窗口销毁之前。数据格式为 `centerX,centerY,axisX,axisY,count`，后接 `count` 组 `pointId,x,y`。轴对填充 SkyBlue 的 160×100 矩形执行旋转和等比缩放，接触点显示半径 16 的黄色圆环；二者都遵守当前范围和裁剪。
+Touching 保留 `Id="FullControlTest.Touching"`，解释器为空。`<wGac repo>/WGacShared/FullControlTestRawElement.h/.cpp` 提供 `AttachFullControlTestTouchingElement`，本地窗口保留附件直到窗口销毁之前。数据格式为 `centerX,centerY,axisX,axisY,count`，后接 `count` 组 `pointId,x,y`。轴对带黑色边框的 160×100 天蓝色矩形执行旋转和等比缩放。接触点显示半径为 16 的橙色（`#FF8800`）圆环。两者都遵守当前范围和裁剪。
 
 本地维护的 `<wGac repo>/WGacShared/FullControlTestRawElementRemote.h/.cpp` 适配器仅附加 Touching。它订阅安装、变化和移除事件，枚举已有元素支持延迟附加，并按元素身份协调以避免重复处理器。ID 改变会移除旧附件。适配器必须先于渲染器销毁；断开后保留的画面继续绘制直到清理。Wayland 原生触摸采集尚不支持，本地及渲染器的自动化适配器也不提供点命令状态。本地用固定数据夹具，远程通过 Core 自动化发送合成 `!PointDown`、`!PointUpdate`、`!PointUp` 验证。
 

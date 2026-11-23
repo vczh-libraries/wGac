@@ -240,21 +240,24 @@ protected:
                 pango_attr_list_insert(attrList, attr);
             }
 
-            // Text color
-            attr = pango_attr_foreground_new(frag.textColor.r * 257, frag.textColor.g * 257, frag.textColor.b * 257);
-            attr->start_index = startByte;
-            attr->end_index = endByte;
-            pango_attr_list_insert(attrList, attr);
+            auto addColorAttribute = [&](PangoAttribute* attribute)
+            {
+                attribute->start_index = startByte;
+                attribute->end_index = endByte;
+                pango_attr_list_insert(attrList, attribute);
+            };
+            // Pango treats an alpha attribute of zero as unset. Transparent text inherits the Cairo source.
+            if (frag.textColor.a != 0)
+            {
+                addColorAttribute(pango_attr_foreground_new(frag.textColor.r * 257, frag.textColor.g * 257, frag.textColor.b * 257));
+                addColorAttribute(pango_attr_foreground_alpha_new(frag.textColor.a * 257));
+            }
 
             // Background color
             if (frag.hasBackgroundColor)
             {
-                attr = pango_attr_background_new(frag.backgroundColor.r * 257,
-                                                  frag.backgroundColor.g * 257,
-                                                  frag.backgroundColor.b * 257);
-                attr->start_index = startByte;
-                attr->end_index = endByte;
-                pango_attr_list_insert(attrList, attr);
+                addColorAttribute(pango_attr_background_new(frag.backgroundColor.r * 257, frag.backgroundColor.g * 257, frag.backgroundColor.b * 257));
+                addColorAttribute(pango_attr_background_alpha_new(frag.backgroundColor.a * 257));
             }
         }
 
@@ -724,8 +727,11 @@ public:
         lastRenderWidth = alignWidth;
 
         // Render the text
+        cairo_save(cr);
+        cairo_set_source_rgba(cr, 0, 0, 0, 0);
         cairo_move_to(cr, bounds.x1 + alignOffsetX, bounds.y1);
         pango_cairo_show_layout(cr, layout);
+        cairo_restore(cr);
 
         // Render inline objects
         for (vint i = 0; i < inlineObjects.Count(); i++)
