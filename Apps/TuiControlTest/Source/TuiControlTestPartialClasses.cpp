@@ -19069,7 +19069,7 @@ Class (::tuidemo::TuiDocumentEditorBase)
 	{
 		auto a = ::vl::__vwsn::This(this->document)->GetCaretBegin();
 		auto b = ::vl::__vwsn::This(this->document)->GetCaretEnd();
-		return ((a.row == b.row) && (a.column != b.column));
+		return ((::vl::__vwsn::This(this->self)->HasEditableCursor() && (a.row == b.row)) && (a.column != b.column));
 	}
 
 	::vl::presentation::compositions::GuiGraphicsComposition* TuiDocumentEditorBase::GetMenuContainer()
@@ -24546,7 +24546,7 @@ Class (::tuidemo::TuiMainWindowConstructor)
 			::vl::__vwsn::This(this->__vwsn_precompile_19)->SetText(::vl::WString::Unmanaged(L"Layout"));
 		}
 		{
-			(this->__vwsn_precompile_20 = new ::vl::presentation::controls::GuiTab(::vl::presentation::theme::ThemeName::Tab));
+			(this->__vwsn_precompile_20 = new ::vl::presentation::controls::GuiTab(::vl::presentation::theme::ThemeName::VTab));
 		}
 		(this->__vwsn_precompile_22 = new ::tuidemo::TuiRepeatTabPage());
 		{
