@@ -1,70 +1,60 @@
-# Test Matrix Card 2026-11-16T16:19:01.369Z
+# Test Matrix Card 2026-11-25T10:34:24.109Z
 
-Input revisions: GacUI `78b86996`, wGac `485a57a4`, GacJS `3f89bfc4`. Evidence directory: <wGac repo>/build/rpxplat-20261116.
+Input revisions: GacUI `6f192cacc`, wGac `ea438a1`, GacJS `db7e1bdd`. Evidence: `<wGac repo>/build/rpxplat-20261125`.
 
 ## Test Matrix
 
 | Test Item | 1st |
 | --- | --- |
-| [Linux][`/RPT`][`/MiniHttp`] | 2026-11-16T16:31:14.062Z |
-| [Linux][`/FCT`][`/MiniHttp`] | 2026-11-16T18:14:37.570Z |
-| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over network] | 2026-11-16T16:44:21.167Z |
-| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over stdio `/Cli:<command>`] | 2026-11-16T16:44:28.195Z |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS browser host `?rvmhost`] | 2026-11-16T16:44:42.473Z |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over network] | 2026-11-16T16:44:56.178Z |
-| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over stdio `/Cli:<command>`] | 2026-11-16T16:45:03.379Z |
+| [Linux][`/RPT`][`/MiniHttp`] | 2026-11-25T10:40:42.307Z |
+| [Linux][`/FCT`][`/MiniHttp`] | 2026-11-25T10:41:31.129Z |
+| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over network] | 2026-11-25T10:50:44.466Z |
+| [Linux][`/RVMT`][`/MiniHttp`][Native `RemotingTest_RvmHost` over stdio `/Cli:<command>`] | 2026-11-25T10:50:58.200Z |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS browser host `?rvmhost`] | 2026-11-25T10:51:05.520Z |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over network] | 2026-11-25T10:51:20.776Z |
+| [Linux][`/RVMT`][`/MiniHttp`][GacJS Node `cli.js` over stdio `/Cli:<command>`] | 2026-11-25T10:51:34.854Z |
 
 ## Build and generated output
 
 | Test Item | 1st |
 | --- | --- |
-| Import / codegen / build / tests / repeat codegen | 2026-11-16 (passed; private WebKit runtime) |
+| Import / codegen / build / tests / repeat codegen | 2026-11-25T10:35:05.542Z |
+
+## Additional browser checks
+
+| Test Item | 1st |
+| --- | --- |
+| Live Chromium composition and Core selection ownership | 2026-11-25T10:53:16.127Z (passed; auto and contenteditable adapters) |
+| Browser touch acquisition, scrolling, cancellation and replacement | 2026-11-25T10:55:48.742Z (passed; Chromium acquisition plus separately identified synthetic ID reuse) |
+| Browser point editing and file-picker double taps | 2026-11-25T10:55:38.482Z (passed; Chromium CDP touch) |
+| Full Toolstrip commands with automation point selection | 2026-11-25T11:01:10.822Z |
+| Firefox synthetic point input | 2026-11-25T11:04:09.163Z |
+| Raw Clock DPR 2 and resize | 2026-11-25T11:04:14.421Z |
+| Read-only style and hyperlink commands | 2026-11-25T11:04:20.694Z |
+| Native OS IME attempt |  |
 
 ## Observations and Limitations
 
-Linux Playwright Firefox is the primary matrix renderer. Supplemental Chromium CDP and explicitly identified Firefox synthetic checks cover browser touch and composition. Windows, macOS, Wasm and physical touch hardware are outside this run. Native desktop input and IME limitations are recorded below.
-
-## Issues Found and Fix
-
-### Build/tests, attempt 1
-
-The first root `yarn test` failed because Playwright WebKit was not installed. `BrowserEditing.test.ts` launches all three browser engines even though the live Linux matrix uses Firefox. Import, codegen and build succeeded. Provisioning the documented missing engine resolved the failure; the complete rerun passed without a product-code change. Evidence: `<wGac repo>/build/rpxplat-20261116/gacjs-test.log`.
+Linux Playwright Firefox is the required renderer. No earlier results are carried forward.
 
 ## Completed observations
 
-Firefox 146.0.1 completed the RPT walkthrough, canceled/accepted File close, renderer replacement and live takeover, repeated local shortcuts, and the fresh intentional fatal case. Every fatal check observed one Core-authored error package, exact `This is a fatel error!` mask, one expected page error, and nonzero Core exit. Both local shortcuts use the canonical Super labels. Mouse checks include Playwright Left/Middle/Right and separately identified DOM-synthetic five-button, movement, double-click, horizontal/vertical wheel and Alt/Super/Ctrl/Shift combinations before and after takeover. URL stayed unchanged. Evidence: `<wGac repo>/build/rpxplat-20261116/rpt-browser-complete.log`, `rpt-browser-normal-events.json`, `rpt-browser-normal-core.json`, `rpt-browser-normal.png`, and `rpt-browser-fatal.json`.
+Import, codegen, build, all 279 tests across 11 packages, and repeat-codegen stability passed. Controlled browser tests executed Chromium, WebKit and Firefox. The private WebKit runtime was reused with its required library path; host library-cache preflight was skipped for that runtime, while every actual test ran. The Windows-only live E2E skip is separate from the completed live Linux Firefox matrix. Evidence: `<wGac repo>/build/rpxplat-20261125/gacjs-test-resumed.log` and `<wGac repo>/build/rpxplat-20261125/gacjs-codegen-stability.json`.
 
-Browser input does not establish native desktop global-shortcut registration. The initial grid assertion included the unchanged Edit menu among new cells; the harness was corrected to compare the pre-add visible labels. This was a test-procedure error, not a product fix.
+Firefox 146.0.1 completed RPT Home, exact local-shortcut dialogs and Super labels, grid Add/Clear, document modal, replacement/takeover, repeated input checks, canceled/accepted File close, and the fresh fatal regression. Fatal evidence contains exactly one Core-authored error, exact `This is a fatel error!` mask and nonzero Core exit. Mouse evidence separates Playwright Left/Middle/Right from DOM-synthetic five-button and modifier checks. Desktop global activation is not established by browser input. Evidence: `<wGac repo>/build/rpxplat-20261125/rpt-browser.log`, `<wGac repo>/build/rpxplat-20261125/rpt-browser-results.json`, `<wGac repo>/build/rpxplat-20261125/rpt-browser-normal-events.json` and `<wGac repo>/build/rpxplat-20261125/rpt-browser-fatal.json` in the evidence directory.
 
-The complete root `yarn test --concurrency 1` passed after provisioning a private Ubuntu 24.04 WebKit runtime. The system Node 22.22.1 completed extraction; Node 26.5.0 had stalled while extracting the browser archive. The private WebKit launcher retains the supplied library path. Playwright's system-library-cache preflight was disabled for this private runtime after checking linked libraries and successfully launching WebKit; all actual browser tests still ran. No project test or assertion was disabled. Linux-only skips of the Windows live E2E harness remain separate from the live Firefox matrix. Evidence is under `<wGac repo>/build/rpxplat-20261116/`: `gacjs-test-final.log`, `webkit-runtime/`, and `browsers/`.
+Firefox FCT passed both editors, exact clipboard/edit results, context and toolbar formatting, hyperlinks/read-only modes, image insertion and private/RTF/HTML file output, all eight styles, palette/state retention, responsive resize/scroll and mouse-capture release, replacement/takeover and normal Force Exit. The responsive clients settled at 240, 350, 440 and 680 by 320; compact scrolling exposed 24 film titles and wide navigation eight publishers. Raw Clock data changes produced changed canvas pixels with one painter. Outgoing bracket keys include 219/221 with shifted braces. Evidence: `<wGac repo>/build/rpxplat-20261125/fct-browser-matrix.log`, `<wGac repo>/build/rpxplat-20261125/fct-browser-responsive-sizes.json`, `<wGac repo>/build/rpxplat-20261125/browser-fct-matrix-result.json` and per-operation control/event captures. Native OS IME was attempted separately as recorded below; physical desktop input is not established.
 
-All five RVM host modes passed exact bracket/brace greeting edits, replacement/takeover, normal shutdown and idle/blocked host loss. Network/browser modes rejected a second host without disturbing the first. Both stdio modes reaped their normal child. Fatal cases each received one Core error with exact `RemotingTest_RvmHost disconnected.` and terminated Core nonzero. Evidence: `<wGac repo>/build/rpxplat-20261116/rvm-browser-*-results.json` and matching logs/fatal captures.
+All five Firefox RVM host modes passed initial/continued exact RPC, replacement/takeover and normal shutdown. Manual native, browser and Node network hosts rejected a second host without losing the accepted service. Both stdio modes used exact POST `!Exit`, returned `Queued`, exited Core normally and reaped the actual child; Node was resolved through PATH with a quoted script path containing spaces. Fresh idle-next-RPC and blocked-RPC host termination produced exactly one `RemotingTest_RvmHost disconnected.` fatal message and terminated Core in every mode. Evidence: `<wGac repo>/build/rpxplat-20261125/rvm-browser-*.log`, per-mode results, fatal JSON and host/Core logs. Externally started second-host admission does not apply to the owned stdio channels.
 
-Firefox FCT uses actual Playwright mouse/keyboard input and browser text insertion; Core Controls are read for assertions. The default website advertises only its CSS default `Segoe UI` font. Font-size, effects and color checks use that available family; enumeration/selection of a second family is unavailable under this default configuration. Native runs separately verified DejaVu Sans Mono. Default face attributes may be omitted from serialized XML.
+Chromium acquisition/gesture and click-pairing runs passed, including Touching/TouchingList, nested scrolling, selected-range point behavior, image-dialog folder navigation and single image insertion by double tap, cancellation/capture/replacement and no duplicate mouse fallback. The full Toolstrip command pass additionally used Core automation short point presses and 650 ms holds for caret/range setup and selected-range context menus. This is separate from Chromium-acquired touch and physical touch. Probe corrections used an interior editor coordinate and the documented seven-position `[Image]` representation; these were test-step corrections, with no product fix. Evidence: `<wGac repo>/build/rpxplat-20261125/touch-step3-browser*.json`, `browser-touch-extra` captures, `<wGac repo>/build/rpxplat-20261125/browser-toolstrip-point-results.json`, point command logs and retained probe logs.
 
-A Preview-refocus attempt clicked the newly created hyperlink, leaving its dialog open for subsequent mode commands. A focused P/S/E shortcut probe passed; the corrected procedure focuses unlinked text. This was a harness correction, not a product fix.
+Firefox DOM-synthetic point checks passed with explicitly stubbed capture; they do not establish Firefox hardware acquisition. DPR 2 and resized backing-canvas checks passed, as did Preview/Selectable rejection of style and hyperlink mutations with Editable restoration. The native IME attempt activated IBus CangJie3 and sent XTest input only to the verified owned headed Firefox window. Search and Document both remained `ABCD`, so native candidate selection/commit/cancellation could not be verified; the original US engine was restored. Evidence: `<wGac repo>/build/rpxplat-20261125/browser-native-ime-fct.json` and screenshot. Browser font dialogs exposed only Segoe UI, so a second installed-family choice was unavailable; font-size and color changes passed.
 
-After a Toolstrip menu command, ordinary Playwright keystrokes correctly replace the selected range. `keyboard.insertText` alone does not type into the noneditable renderer container after that menu takes DOM focus. The harness now uses ordinary keys for printable ASCII and separately identifies direct Unicode insertion. Evidence: `browser-seed-probe.log`; no product change was needed.
+A supplemental Firefox run verified the collapsed Style popup at an actual 669×870 client, all eight styles/reapplication with range retention, and normal shutdown. This complements the original 1280×960 inline-gallery/dropdown run. Vertical-tab Up/Down and checkbox/choice/editor retention across palettes also passed. Native desktop key attempts through both AT-SPI and XTest produced no delivered bytes, so outside-focus global shortcut activation remains unverified. Evidence: `<wGac repo>/build/rpxplat-20261125/browser-fct-supplement-result.json`, `<wGac repo>/build/rpxplat-20261125/browser-narrow-gallery-size.json`, `<wGac repo>/build/rpxplat-20261125/browser-narrow-gallery.png` and the native card’s desktop-input evidence.
 
-## Browser-specific checks
+Additional selection checks retained Vertigo through every reachable responsive width and synchronized account choices between the compact menu and wide list. Native remote DOM showed exactly one account-selection image, beside Simon & Schuster; the matching browser screenshot showed one green arrow there. Standard mode passed compact movie/account selection. Evidence: `<wGac repo>/build/rpxplat-20261125/fct-*-responsive-selection.json`, `<wGac repo>/build/rpxplat-20261125/native-responsive-account-arrow-audit.json` and `<wGac repo>/build/rpxplat-20261125/browser-responsive-selected-account.png`.
 
-| Test Item | Result |
-| --- | --- |
-| Firefox FCT rich editors, gallery, layout and lifecycle | 2026-11-16 (passed; detailed and fresh lifecycle runs) |
-| Browser touch acquisition, scrolling, cancellation and replacement | 2026-11-16 (passed; Chromium acquisition and Firefox synthetic checks distinguished below) |
-| Browser point editing and file-picker double taps | 2026-11-16T18:53:21.692Z (passed; Chromium CDP touch) |
-| Live Chromium composition and Core selection ownership | 2026-11-16T18:48:33.410Z (passed; auto and contenteditable adapters) |
-| Native operating-system IME attempt | 2026-11-16 (attempted; native delivery unavailable in the locked session) |
-| Raw Clock canvas pixels, resize and DPR | 2026-11-16 (passed at DPR 1 and 2; resized DPR 2 viewport) |
+## Issues Found and Fix
 
-Both Firefox editors completed context/toolbar commands, font/colors/effects, hyperlinks and read-only modes, images, private persistence and RTF/HTML exports. Gallery checks cover all eight styles, repeat application, sample menus, and a real 640-pixel collapsed Style group. Layout and selected document/range survive palette changes. Responsive cycling reached 240/350/440/680 widths and short/tall heights; each of the four appearances scrolled through all 24 film titles. Outside-page mouse release was an invalid first capture probe; releasing outside the renderer but inside the page passed resize/title capture cleanup, subsequent unpressed movement, ordinary resize and close. Evidence: `fct-browser-ribbon-passed.log`, `fct-browser-matrix.log`, `fct-browser-responsive-sizes.json`, `browser-capture-run.log` and `browser-mouse-capture.json`.
-
-Firefox normal replacement/takeover retained the complete private document, repeated the local shortcuts and five-button modifier checks, and exited Core normally. Clock screenshots changed with Core time, exactly one canvas survived page changes, and backing dimensions matched DPR 1 and 2 before/after viewport resize. The headed Firefox IME attempt activated IBus CangJie3, verified the owned X11 window and focus, and sent candidate keys in both Search and Document; both stayed exactly `ABCD` at the interior caret. Native candidate selection/cancellation is unavailable in this locked session. The original `xkb:us::eng` engine was restored. Evidence: `fct-browser-lifecycle.log`, `browser-dpr.log`, `browser-clock-pixels-*.json`, and `browser-native-ime-summary.json`.
-
-The main Chromium touch run exposed an outdated assertion in `<GacUI repo>/Test/Touching_Browser.mjs`: it expected a short press on a selected endpoint to preserve the range. The current SOP requires short-press collapse and long-press preservation. The helper now checks those separately and restores the exact range before scrolling/momentum assertions. The original failure evidence is retained as `touch-stale-assertion.log` and `touch-stale-assertion-evidence.json`; the corrected helper passed the complete rerun.
-
-The corrected main touch run passed 167 recorded checks, including raw rectangle/contact pixels, rotation/scale, extra-contact pause, swipe clamping/reversal/deletion, list selection, document range retention, both momentum modes and palette replacement. The separate double-tap run passed 55 recorded checks plus detailed Ribbon/Toolstrip editor assertions, including exact one-image insertion and Undo/Redo. Supplemental Chromium 145.0.7632.6 checks passed contact membership/ID slots, consecutive transport indices, decimal-string sequence/timestamps, PlatformCanceled and CaptureLost cleanup without fabricated Up/click, accepted/rejected stream replacement, ordinary-button rejection, secondary-contact suppression, descendant touch-action and normal outside input. Capture-loss injection first establishes active capture with a move; releasing merely pending capture does not generate a lost-capture event. Firefox 146.0.1 also passed a separate DOM-synthetic point stream with explicitly stubbed capture APIs. Neither synthetic events nor CDP touch establishes physical hardware input. Evidence: `touch-step3-browser.json`, `touch-step3-browser-pairing.json`, `touch-browser*.log`, `browser-touch-extra-result.json`, and `browser-firefox-touch-result.json`.
-
-Live Chromium tests passed both default EditContext and forced contenteditable adapters: exact Unicode insertion, forward/reversed selection replacement, canceled composition preserving Core text/ranges, subsequent commit replacing those ranges, multi-paragraph replacement, Undo/Redo and tab persistence. The harness waits for each committed paragraph before the next key and includes empty paragraphs when decoding Core XML. This remains separate from the unavailable native IME attempt. Evidence: `browser-editing-live.log`, `browser-editing-live-result.json`, and the composition-event captures.
-
-The final read-only command pass succeeded in rebuilt standard native, hosted native, native remote and Firefox surfaces. Preview and Selectable reject hyperlink edit/removal and Ribbon style application without changing the document; returning to Editable restores both operations. Every run closed normally. Native popup Escape is addressed to the popup window; hosted/browser outside dismissal uses a visible main-window control. Evidence: `readonly-matrix.log` and `fct-*-readonly-style.json` in the evidence directory.
+No reproducible product defect was found. Probe corrections and unavailable input paths are documented above.

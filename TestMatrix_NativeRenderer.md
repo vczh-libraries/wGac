@@ -1,66 +1,68 @@
-# Test Matrix Card 2026-11-16T16:19:01.369Z
+# Test Matrix Card 2026-11-25T10:34:24.109Z
 
-Input revisions: GacUI `78b86996`, wGac `485a57a4`, GacJS `3f89bfc4`. Evidence directory: <wGac repo>/build/rpxplat-20261116.
+Input revisions: GacUI `6f192cacc`, wGac `ea438a1`, GacJS `db7e1bdd`. Evidence: `<wGac repo>/build/rpxplat-20261125`.
 
 ## Test Matrix
 
 | Test Item | 1st |
 | --- | --- |
-| [Linux][Test_CppTest_Rvm][`/MiniHttp`] | 2026-11-16T16:38:51.458Z |
-| [Linux][`/RPT`][`/MiniHttp`] | 2026-11-16T16:36:22.880Z |
-| [Linux][`/FCT`][`/MiniHttp`] | 2026-11-16 (passed; full walkthrough plus fresh lifecycle run) |
-| [Linux][`/RVMT`][`/MiniHttp`] | 2026-11-16T16:42:33.895Z |
-| [Linux][`/RVMT`][`/MiniHttp /Cli:<command>`] | 2026-11-16T16:44:07.651Z |
+| [Linux][Test_CppTest_Rvm][`/MiniHttp`] | 2026-11-25T11:08:40.033Z |
+| [Linux][`/RPT`][`/MiniHttp`] | 2026-11-25T11:12:47.573Z |
+| [Linux][`/FCT`][`/MiniHttp`] | 2026-11-25T11:47:53.851Z |
+| [Linux][`/RVMT`][`/MiniHttp`] | 2026-11-25T11:13:13.684Z |
+| [Linux][`/RVMT`][`/MiniHttp /Cli:<command>`] | 2026-11-25T11:13:30.775Z |
 
 ## Local applications and build
 
 | Test Item | 1st |
 | --- | --- |
-| CodePack / import / sync / build | 2026-11-16 (passed; final import, sync and full build also passed) |
-| Native service unit tests | 2026-11-16T16:32:54.183Z |
-| Local Hello World | 2026-11-16T16:34:09.966Z |
-| Local FullControlTest standard | 2026-11-16 (fixed; service checks passed, desktop limitations below) |
-| Local FullControlTest hosted | 2026-11-16 (passed; service input, desktop limitations below) |
-| Native touch acquisition / Touching / TouchingList |  |
+| CodePack / import / sync / build | 2026-11-25T11:54:55.354Z |
+| Native service unit tests | 2026-11-25T10:52:34.523Z |
+| Local Hello World | 2026-11-25T11:14:33.240Z |
+| Local FullControlTest standard | 2026-11-25T11:37:09.509Z |
+| Local FullControlTest hosted | 2026-11-25T11:44:51.573Z |
+| Live Raw Clock pixels, palettes and renderer lifecycle | 2026-11-25T11:20:36.639Z |
+| Native portal registration | 2026-11-25T12:00:27.237Z |
+| Native desktop input and global shortcuts |  |
+| Native touch acquisition |  |
+| Native Touching |  |
+| Native TouchingList |  |
+| Native Toolstrip point-input scenario |  |
 
 ## Observations and Limitations
 
-Linux only. Native touch rows are excluded because wGac has no native touch provider. Raw Clock and mouse/keyboard checks remain in scope. Windows, macOS and Wasm are outside this run. No earlier results are carried forward.
+Linux only. Native touch acquisition, Touching and TouchingList are excluded because wGac has no native touch provider. The Toolstrip point-input scenario is also excluded by the SOP for wGac. Raw Clock and mouse/keyboard checks remain in scope. No earlier results are carried forward.
 
 ## Completed observations
 
-The official import/sync/build passed. Native service suites passed: AsyncService 2, ImageService 2, GlobalShortcuts 4, RenderingLifecycle 2, ClipboardService 3, RawElement standard 8 and hosted 8 cases. Hello World exposed its expected title/label and exited normally through automation.
+Initial CodePack, import, dual-architecture resource generation and full `<wGac repo>/build.sh` succeeded. All seven native service invocations passed (29 cases): Async 2, Image 2, Clipboard 3, GlobalShortcuts 4, RenderingLifecycle 2, and RawElement 8 each in standard and hosted modes. These cover real Wayland buffers/cleanup and an isolated mock shortcut portal; desktop global activation remains separate. Evidence: `<wGac repo>/build/rpxplat-20261125/build.log`, `<wGac repo>/build/rpxplat-20261125/native-services-results.json` and `<wGac repo>/build/rpxplat-20261125/service-*.log`.
 
-Native RPT completed Home, exact local-shortcut dialogs and Super labels, all five mouse buttons with modifiers, move/double-click/both wheel axes, three-row grid add/clear, document modal, replacement and takeover, repeated input checks, cancel/accept File close, and the fresh intentional fatal case. Core and renderers exited normally for normal shutdown; the intentional fatal preserved the exact DOM error and rejected normal input until exact `!Exit`. Evidence directory: `<wGac repo>/build/rpxplat-20261116/`; corresponding files are `unit-*.log`, `hello-controls.json`, `rpt-native.log`, `native-rpt-results.json`, and `native-rpt-fatal.json`.
+The full GacUI Linux unit suite passed 2,019/2,019 cases across 97/97 files (`<wGac repo>/build/rpxplat-20261125/unit-test.log`). The generated Linux unit inventory includes the upstream Windows-theme source, whose platform guards remain in effect.
 
-Desktop screenshot service returned `AccessDenied: Screenshot is not allowed`. AT-SPI could inspect and focus the owned GNOME Terminal, but generated keyboard input produced no terminal bytes. Desktop-delivered global shortcut activation and physical input remain unverified; automation input is recorded separately.
+Snapshot audit resolved cumulative element IDs in all 96 changed frames: 91 matched the committed rendered state exactly; five supplementary-character cases had only the expected Linux UTF-32 caret offsets (4 versus Windows UTF-16 5) and corresponding mock text widths. Image metadata and frame counts were unchanged. The complete local patch and semantic/metadata audits are retained in the evidence directory; verified platform/allocation churn was restored rather than replacing the shared baselines.
 
-Local RVM over MiniHTTP and remote RVM with native network and native stdio hosts passed exact greeting/RPC changes, normal shutdown, idle host loss and blocked-RPC host loss. Remote runs also passed renderer replacement/takeover; network runs rejected a second host while the accepted host remained usable. Stdio normal shutdown reaped its child. Every native renderer host-loss case retained exactly `RemotingTest_RvmHost disconnected.` in its fatal DOM. The stdio harness was adjusted to wait for the queued character to enter RPC before probing blocked Controls; no product change was needed. Logs and structured evidence: `<wGac repo>/build/rpxplat-20261116/rvm-{local,native}-*`.
+Standalone native RVM passed exact RPC and duplicate-host rejection, normal close, and idle-next-call/blocked-call host loss; both failure variants terminated through an unhandled `rpc_controller::RpcInjectedException`. Native RPT passed its normal workflow, five buttons/modifiers and both wheel axes, replacement/takeover, canceled/accepted close, and a fresh fatal case. A Core debugger observation recorded exactly one serialized `!Error` with `This is a fatel error!`; renderer `Dom.fatalError` matched, ordinary input did not resume it, and exact `!Exit` closed it. Linux io_uring sends were invisible to the initial syscall-payload probe; the package-serialization observation and renderer state provide the fatal evidence. No product fix was needed. Evidence: `rvm-local-network*`, `<wGac repo>/build/rpxplat-20261125/rpt-native-normal-and-strace-probe.log`, `<wGac repo>/build/rpxplat-20261125/native-rpt-fatal-core-fatal-packages.jsonl`, `<wGac repo>/build/rpxplat-20261125/native-rpt-fatal.json`.
+
+Both native remote RVM host modes passed exact RPC, renderer replacement/takeover, normal shutdown and the owned stdio-child reap. Network mode rejected a second host. Fresh idle and blocked host-loss cases each produced one Core-authored serialized `!Error` carrying `RemotingTest_RvmHost disconnected.`, a matching retained renderer DOM, and nonzero Core termination; exact `!Exit` then closed each renderer. GDB observed Core package serialization without changing source, and reports SIGABRT through its child-result status. Evidence: `<wGac repo>/build/rpxplat-20261125/rvm-native-*-results.json`, `<wGac repo>/build/rpxplat-20261125/*-fatal-packages.jsonl`, fatal DOM captures and logs.
+
+Live Raw Clock pixel checks passed in standard, hosted and remote modes, after palette/template changes, and after renderer replacement/takeover. Stable owned Wayland buffer captures show the complete white rim/hour marks, cyan/green/yellow hands and antialiased dark outlines; each later Core time produced changed clock pixels. Layout changes resized the standard/hosted backing surface from 642×517 to 642×885 and remote from 642×517 to 642×527, with all four rim extrema visible. The standard PNG was visually inspected. This validates application buffers, separately from desktop screen capture. Evidence: `<wGac repo>/build/rpxplat-20261125/clock-pixels-*.json`, `<wGac repo>/build/rpxplat-20261125/clock-pixels-*.png` and `<wGac repo>/build/rpxplat-20261125/native-clock-pixels.log`.
+
+A live AT-SPI attempt found the owned native FCT process, but its application exposed zero accessible frames or controls, so document operations could not be repeated through UIA. GNOME ScreenSaver reported `false`; current input/capture limitations are not attributed to a confirmed lock. Portal applications also exposed no consent frames during this probe. Evidence: `<wGac repo>/build/rpxplat-20261125/native-fct-standard-atspi.json`.
+
+Standard local FCT completed both document editors, context/toolbar edit operations, selection and clipboard, fonts/colors/effects/alignment, hyperlinks/read-only modes, images, private save/reload, RTF/HTML export, all eight styles, layout/palette retention and normal close. The final Toolstrip command group passed in an isolated fresh application after correcting the probe to move the pointer before focusing or opening its context menu. Gallery probes now explicitly open the dropdown before scrolling an offscreen style. These are probe corrections, not product fixes. Evidence: `<wGac repo>/build/rpxplat-20261125/fct-standard-*.json`, document XML/export files, retained split-run logs and `<wGac repo>/build/rpxplat-20261125/fct-one-fct-extra-Toolstrip-standard.log`.
+
+Hosted FCT completed the same editor/clipboard/formatting/image/export suite, style/read-only checks, palette retention, responsive resize/scroll cycles and normal shutdown. Its four appearances were observed at actual client widths 240, 350, 440 and 613 (height 320); tall/short cases reached 428/220 pixels. The host constrained the Windows reference dimensions, while every appearance and the equal-width reachable footer passed. Native service IO did not execute compositor maximize actions; a Wayland trace contained no maximize request. Standard-mode OS window resize and wider native gallery geometry therefore remain unverified. Evidence: `<wGac repo>/build/rpxplat-20261125/fct-hosted-*.json`, `<wGac repo>/build/rpxplat-20261125/fct-hosted-initial-gallery-probe.log`, `<wGac repo>/build/rpxplat-20261125/fct-hosted-layout-and-maximize-probe.log`, `<wGac repo>/build/rpxplat-20261125/fct-local-matrix-hosted.log` and `host-maximize-probe.*`.
+
+Captured standard/hosted/browser layout states retained exactly five pixels between the final vertical header and the responsive button under Default, Ember and Aurora. The selected header changed to the corresponding palette color before hover; contiguous header positions remained stable. Evidence: `<wGac repo>/build/rpxplat-20261125/layout-palette-geometry-audit.json`.
+
+Remote FCT completed both full document suites, style/read-only checks, responsive layouts, exact retained document XML across replacement/takeover, fresh lists/shortcuts/buttons on the new renderer and normal queued close. Hosted and remote scrolling exposed all 24 films and all eight publisher names. Their four appearances followed 0→1→2→3 and back; remote widths were 240/350/440/613 and wide heights 220/438. Geometry audits confirmed equal-width footer buttons and consistent compact/detailed rows. Supplemental standard, hosted, remote and Firefox runs passed vertical-tab Up/Down and retained checkbox, choice and editor values across palettes. Evidence: `<wGac repo>/build/rpxplat-20261125/native-fct-matrix-result.json`, `<wGac repo>/build/rpxplat-20261125/fct-native-matrix.log`, `<wGac repo>/build/rpxplat-20261125/responsive-appearance-audit.json`, and `<wGac repo>/build/rpxplat-20261125/fct-*-layout-inputs.json`.
+
+The live native GlobalShortcuts portal accepted CreateSession and BindShortcuts (both response 0), returned the requested Ctrl+Shift+Alt+Super+Q binding, and the session closed with the owned app. No consent window was exposed. Outside-focus activation remains unavailable: AT-SPI reported the owned GNOME terminal focused/active and accepted both string and keycode generation, but its raw capture received zero bytes; XTest likewise delivered no bytes to the verified Kitty window. Native FCT again exposed no accessible frames. These observations establish registration, not global activation or physical input. Evidence: `<wGac repo>/build/rpxplat-20261125/native-portal-result.json`, `<wGac repo>/build/rpxplat-20261125/native-desktop-atspi.json`, `<wGac repo>/build/rpxplat-20261125/native-atspi-input.json`, `<wGac repo>/build/rpxplat-20261125/native-key-capture.json` and `<wGac repo>/build/rpxplat-20261125/kitty-xtest-ctrl-q.json`.
+
+Final `<wGac repo>/import.sh` → `<wGac repo>/syncProj.sh` → `<wGac repo>/build.sh` completed successfully in order. The upstream ownership audit matched all 23 changed imported/resource paths (allowing documented line endings and resource-generator settings) and all 124 changed GacJS snapshot JSON files. Evidence: `<wGac repo>/build/rpxplat-20261125/final-import.log`, `<wGac repo>/build/rpxplat-20261125/final-sync.log`, `<wGac repo>/build/rpxplat-20261125/final-build.log`, and `<wGac repo>/build/rpxplat-20261125/final-generated-ownership-audit.json`.
+
+Additional selection checks retained Vertigo through every reachable responsive width and synchronized account choices between the compact menu and wide list. Native remote DOM showed exactly one account-selection image, beside Simon & Schuster; the matching browser screenshot showed one green arrow there. Standard mode passed compact movie/account selection. Evidence: `<wGac repo>/build/rpxplat-20261125/fct-*-responsive-selection.json`, `<wGac repo>/build/rpxplat-20261125/native-responsive-account-arrow-audit.json` and `<wGac repo>/build/rpxplat-20261125/browser-responsive-selected-account.png`.
 
 ## Issues Found and Fix
 
-### Native clipboard failure
-
-Two service-driven Ribbon attempts selected `(0,0)-(0,5)` (`GacUI`), copied, moved to the document end and pasted; the document stayed unchanged. The native clipboard writer created a Wayland source, but its reader depended entirely on an incoming compositor offer; `ContainsDocument` was also unimplemented. The test session had no usable desktop input serial. Fixed and rebuilt; detailed results follow below. Evidence: `<wGac repo>/build/rpxplat-20261116/fct-selection-controls.json`, `<wGac repo>/build/rpxplat-20261116/fct-context-controls.json`.
-
-The clipboard fix now keeps a process-local snapshot of text, rich document and image data, supplies text/image fallbacks for rich copies, and tracks a unique Wayland offer identity so a foreign owner retires local data. A copy is readable locally even without a compositor input serial. Three focused ClipboardService tests and the official full build passed; rebuilt standard Ribbon and Toolstrip passed exact clipboard edits, formatting, images, private reload with the source image removed, and actual RTF/HTML image exports. Native document XML omits natural image dimensions unless overridden; the HTML export verifies the decoded 123×456 size.
-
-Standard FCT also passed layout-page and palette retention, selected document/range retention, compact responsive-modal data and eight-account menu, repeated fresh 240×320 openings with OK/Cancel and restored owner input, and continued Raw Clock updates after palette changes. Service-driven native resize did not change the OS modal dimensions; wide/short native modal appearances and native title-bar close remain unavailable in this desktop session. Detailed logs are `fct-standard-*.log` in the evidence directory.
-
-The unit-test snapshot audit resolved element references in every changed frame. File-dialog rendered trees were identical despite identity/cache and asynchronous frame-number changes. Supplementary-character differences were only UTF-32 versus UTF-16 caret offsets. The run patch and semantic audit were retained in the evidence directory; platform-specific snapshot churn was restored.
-
-### Delayed tooltip protocol failure
-
-Repeated standard Ribbon-gallery runs exited normally while the main window was still open. GDB showed `libdecor_dispatch` returning `-32` (`EPIPE`), and peeking the unread Wayland error recovered exactly `xdg_surface destroyed before constructed`. `CreateXdgSurface` allocated a child xdg surface before checking whether its popup parent still had a role; when the menu had closed, cleanup destroyed the unconstructed surface and the compositor disconnected the application. A focused live-compositor regression now exercises a delayed tooltip with an unmapped menu parent before the ordering fix. Evidence: `fct-standard-exit-debug.log`, `fct-standard-protocol-debug.log`, and the gallery attempt logs in the evidence directory.
-
-The new compositor regression failed against the original implementation and passes after moving the parent-role check before child xdg-surface allocation. The official build and both RenderingLifecycle cases pass. Five consecutive rebuilt gallery walkthroughs passed, including all eight styles, repeat application, scrolling and sample menus. This fix is separate from the clipboard fix.
-
-Standard FCT completed normal queued Close. The external X11 clipboard owner replaced the local rich copy with exact Unicode text. TUI private saves cross-opened in both native GUI editors with identical full document XML, including the complete style catalog and three embedded images. Standard and hosted additional commands cover equivalent edit/toolbar operations, link submenu/ribbon changes and removal, exact Preview URL activation, read-only rejection, five context separators, viewport-edge menus and Alignment expansion. Hosted responsive cycling reached actual widths 240, 350, 440 and 644 (the physical viewport bounded the requested 680), with all four intended appearances, independent list scrolling, short/tall heights, shrink/grow repetition, reachable footer and title-bar close.
-
-AT-SPI sees the native application with zero accessible children; the GlobalShortcuts portal reports version 1 but no showing consent dialog was accessible. Desktop screenshot access was denied. Native desktop global activation, OS window resize and physical input remain unavailable; service and hosted-window results do not establish those paths.
-
-Native remote FCT completed both rich editors, files/images, gallery, all equivalent command groups, layout/palettes and responsive cycles. A fresh lifecycle run passed replacement and concurrent takeover with full document continuity, repeated local shortcuts/five-button modifier checks and normal queued Close of Core/renderer. Clear preserves the list sequence counter: after takeover Add produced 10–19, correctly retaining state; the harness originally expected 0–9 and was corrected. Evidence: `fct-native-matrix.log`, `native-fct-lifecycle.log` and `native-fct-matrix-result.json`.
-
-Final `./import.sh`, `./syncProj.sh` and `./build.sh` all completed successfully in that order. The rebuilt ClipboardService (3/3) and RenderingLifecycle (2/2) regressions passed. GacUI Debug x64 passed 97/97 files and 2008/2008 cases; generated Linux test inputs now include the existing editable-editor test file. Final build and regression logs use the `-final.log` suffix in the evidence directory.
-
-The final read-only command pass succeeded in rebuilt standard native, hosted native, native remote and Firefox surfaces. Preview and Selectable reject hyperlink edit/removal and Ribbon style application without changing the document; returning to Editable restores both operations. Every run closed normally. Native popup Escape is addressed to the popup window; hosted/browser outside dismissal uses a visible main-window control. Evidence: `readonly-matrix.log` and `fct-*-readonly-style.json` in the evidence directory.
+No reproducible product defect was found. Probe corrections and unavailable input paths are documented above.
