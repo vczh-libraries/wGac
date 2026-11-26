@@ -10,31 +10,29 @@ namespace vl {
 namespace presentation {
 namespace wayland {
 
-namespace {
-    const xdg_surface_listener xdg_surface_listener_ = {
-        .configure = WGacNativeWindow::xdg_surface_configure,
-    };
+const xdg_surface_listener xdg_surface_listener_ = {
+    .configure = WGacNativeWindow::xdg_surface_configure,
+};
 
-    libdecor_frame_interface libdecor_frame_interface_ = {
-        .configure = WGacNativeWindow::libdecor_frame_configure,
-        .close = WGacNativeWindow::libdecor_frame_close,
-        .commit = WGacNativeWindow::libdecor_frame_commit,
-        .dismiss_popup = WGacNativeWindow::libdecor_frame_dismiss_popup,
-    };
+libdecor_frame_interface libdecor_frame_interface_ = {
+    .configure = WGacNativeWindow::libdecor_frame_configure,
+    .close = WGacNativeWindow::libdecor_frame_close,
+    .commit = WGacNativeWindow::libdecor_frame_commit,
+    .dismiss_popup = WGacNativeWindow::libdecor_frame_dismiss_popup,
+};
 
-    const xdg_popup_listener xdg_popup_listener_ = {
-        .configure = WGacNativeWindow::xdg_popup_configure,
-        .popup_done = WGacNativeWindow::xdg_popup_done,
-    };
+const xdg_popup_listener xdg_popup_listener_ = {
+    .configure = WGacNativeWindow::xdg_popup_configure,
+    .popup_done = WGacNativeWindow::xdg_popup_done,
+};
 
-    const wl_callback_listener frame_listener = {
-        .done = WGacNativeWindow::frame_done,
-    };
+const wl_callback_listener frame_listener = {
+    .done = WGacNativeWindow::frame_done,
+};
 
-    const wl_callback_listener popup_sync_listener = {
-        .done = WGacNativeWindow::popup_sync_done,
-    };
-}
+const wl_callback_listener popup_sync_listener = {
+    .done = WGacNativeWindow::popup_sync_done,
+};
 
 WGacNativeWindow::WGacNativeWindow(WaylandDisplay* _display, INativeWindow::WindowMode _mode)
     : display(_display)
@@ -66,7 +64,7 @@ WGacNativeWindow::WGacNativeWindow(WaylandDisplay* _display, INativeWindow::Wind
     , closed(false)
     , pendingFrame(false)
     , hasFirstFrame(false)
-    , hasCommittedBuffer(false)
+    , hasMatchingBuffer(false)
     , libdecorStateInitialized(false)
     , customFrameMode(false)
     , pressedCaptionButton(INativeWindowListener::NoDecision)
@@ -448,7 +446,17 @@ void WGacNativeWindow::CommitRequestedSize()
 
     ::libdecor_frame_commit(libdecorFrame, state, nullptr);
     libdecor_state_free(state);
-    if (hasCommittedBuffer)
+    CommitSurface();
+}
+
+void WGacNativeWindow::CommitSurface()
+{
+    // Window geometry and configure acknowledgments are applied by any surface
+    // commit, even one that only requests a frame or updates a decoration.
+    // Keep them pending until the corresponding content buffer is attached.
+    // Otherwise growing geometry is clamped to the old buffer, moving the
+    // opposite edge during interactive resize and feeding back into configure.
+    if (surface && configured && hasMatchingBuffer)
     {
         wl_surface_commit(surface);
     }
@@ -474,10 +482,12 @@ void WGacNativeWindow::ResizeBufferForCurrentSize()
     if (bufferPool->GetWidth() != scaledWidth ||
         bufferPool->GetHeight() != scaledHeight)
     {
+        hasMatchingBuffer = false;
         bufferPool->Resize(scaledWidth, scaledHeight);
     }
     if (surface && currentBufferScale != scale)
     {
+        hasMatchingBuffer = false;
         currentBufferScale = scale;
         wl_surface_set_buffer_scale(surface, scale);
     }
@@ -699,7 +709,7 @@ void WGacNativeWindow::Destroy()
     visible = false;
     closed = false;
     hasFirstFrame = false;
-    hasCommittedBuffer = false;
+    hasMatchingBuffer = false;
 }
 
 void WGacNativeWindow::SetGraphicsHandler(Interface* handler)
@@ -720,10 +730,15 @@ void WGacNativeWindow::CommitBuffer()
     }
     if (view && view->GetCurrentBuffer() && surface) {
         auto* buffer = view->GetCurrentBuffer();
+        if (buffer->GetWidth() != bufferPool->GetWidth() ||
+            buffer->GetHeight() != bufferPool->GetHeight())
+        {
+            return;
+        }
         buffer->Attach(surface, 0, 0);
         buffer->DamageAll(surface);
-        hasCommittedBuffer = true;
-        wl_surface_commit(surface);
+        hasMatchingBuffer = true;
+        CommitSurface();
     }
 }
 
@@ -745,12 +760,7 @@ void WGacNativeWindow::xdg_surface_configure(void* data, xdg_surface* xdg_surfac
 
         if (self->bufferPool->GetWidth() != static_cast<uint32_t>(scaledWidth) ||
             self->bufferPool->GetHeight() != static_cast<uint32_t>(scaledHeight)) {
-            self->bufferPool->Resize(scaledWidth, scaledHeight);
-            // Only update buffer scale if it actually changed to avoid configure loops
-            if (self->currentBufferScale != scale) {
-                self->currentBufferScale = scale;
-                wl_surface_set_buffer_scale(self->surface, scale);
-            }
+            self->ResizeBufferForCurrentSize();
             for (vint i = 0; i < self->listeners.Count(); i++) {
                 self->listeners[i]->Moved();
             }
@@ -836,6 +846,16 @@ void WGacNativeWindow::libdecor_frame_configure(
         return;
     }
 
+    const bool firstConfigure = !self->configured;
+    const bool sizeChanged =
+        self->currentWidth != width ||
+        self->currentHeight != height;
+    self->currentWidth = width;
+    self->currentHeight = height;
+    // libdecor can request a surface commit while applying this state. Mark
+    // the old content buffer obsolete before invoking any of its callbacks.
+    self->ResizeBufferForCurrentSize();
+
     ::libdecor_frame_commit(frame, state, configuration);
     libdecor_state_free(state);
 
@@ -857,19 +877,12 @@ void WGacNativeWindow::libdecor_frame_configure(
         }
         self->libdecorStateInitialized = true;
     }
-    const bool firstConfigure = !self->configured;
-    const bool sizeChanged =
-        self->currentWidth != width ||
-        self->currentHeight != height;
-    self->currentWidth = width;
-    self->currentHeight = height;
     self->configured = true;
     if (libdecor_frame_is_floating(frame))
     {
         self->lastFloatingWidth = width;
         self->lastFloatingHeight = height;
     }
-    self->ResizeBufferForCurrentSize();
     self->UpdateNativeParent();
     self->UpdatePlatformFrame(false);
 
@@ -910,10 +923,9 @@ void WGacNativeWindow::libdecor_frame_close(libdecor_frame* frame, void* data)
 void WGacNativeWindow::libdecor_frame_commit(libdecor_frame* frame, void* data)
 {
     auto* self = static_cast<WGacNativeWindow*>(data);
-    if (frame == self->libdecorFrame && self->surface &&
-        self->configured && self->hasCommittedBuffer)
+    if (frame == self->libdecorFrame)
     {
-        wl_surface_commit(self->surface);
+        self->CommitSurface();
     }
 }
 
@@ -974,13 +986,9 @@ void WGacNativeWindow::RequestFrame()
 
     frameCallback = wl_surface_frame(surface);
     wl_callback_add_listener(frameCallback, &frame_listener, this);
-    // Paint may schedule rendering instead of attaching a buffer immediately.
-    // Let that first buffer commit carry the configure acknowledgment and frame
-    // callback together; an empty commit here would consume the acknowledgment.
-    if (hasCommittedBuffer)
-    {
-        wl_surface_commit(surface);
-    }
+    // Paint may schedule rendering. A pending resize must carry this callback
+    // and its configure acknowledgment with the new buffer, just like mapping.
+    CommitSurface();
 }
 
 void WGacNativeWindow::OnFrame()
@@ -1079,10 +1087,7 @@ void WGacNativeWindow::SetTitle(const WString& _title) {
     if (libdecorFrame) {
         AString aTitle = wtoa(title);
         libdecor_frame_set_title(libdecorFrame, aTitle.Buffer());
-        if (configured && surface)
-        {
-            wl_surface_commit(surface);
-        }
+        CommitSurface();
     }
     NotifyWGacNativeWindowTitleChanged(this);
 }
@@ -1090,10 +1095,7 @@ void WGacNativeWindow::SetTitle(const WString& _title) {
 void WGacNativeWindow::SetApplicationId(const AString& applicationId) {
     if (libdecorFrame) {
         libdecor_frame_set_app_id(libdecorFrame, applicationId.Buffer());
-        if (configured && surface)
-        {
-            wl_surface_commit(surface);
-        }
+        CommitSurface();
     }
 }
 
@@ -1135,10 +1137,7 @@ void WGacNativeWindow::SetParent(INativeWindow* parent) {
         parentWindow->childWindows.Add(this);
     }
     UpdateNativeParent();
-    if (configured && surface)
-    {
-        wl_surface_commit(surface);
-    }
+    CommitSurface();
 }
 INativeWindow::WindowMode WGacNativeWindow::GetWindowMode() { return mode; }
 void WGacNativeWindow::EnableCustomFrameMode() {
@@ -1328,7 +1327,7 @@ void WGacNativeWindow::HideInternal() {
 
     // A recreated role must acknowledge configure and attach its first content
     // buffer together; an empty commit would consume that acknowledgment.
-    hasCommittedBuffer = false;
+    hasMatchingBuffer = false;
 
     if (IsPopupMode()) {
         // Reset state so next Show() works correctly

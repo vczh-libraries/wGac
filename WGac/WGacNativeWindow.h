@@ -63,7 +63,7 @@ protected:
     bool closed;
     bool pendingFrame;
     bool hasFirstFrame;
-    bool hasCommittedBuffer;
+    bool hasMatchingBuffer;
     bool libdecorStateInitialized;
 
     bool customFrameMode;
@@ -92,6 +92,7 @@ protected:
     void UpdatePlatformFrame(bool commitState = true);
     void UpdateNativeParent();
     void CommitRequestedSize();
+    void CommitSurface();
     void ResizeBufferForCurrentSize();
     void ReleasePopupGrab();
     void DismissPopupChildren();

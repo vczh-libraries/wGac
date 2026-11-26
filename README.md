@@ -144,7 +144,7 @@ Run the native service regressions after building:
 ./build/WGacTest/bin/Test_RawElement /C --hosted
 ```
 
-`Test_RenderingLifecycle` requires an available Wayland display. It checks that resizing during a draw preserves the active Cairo buffer and that the next draw uses the resized pool. It also verifies that a delayed tooltip whose popup parent has no mapped role leaves the compositor connection usable. Native rendering discards an obsolete-sized frame and asks GacUI to render again.
+`Test_RenderingLifecycle` requires an available Wayland display. It checks that resizing during a draw preserves the active Cairo buffer and that the next draw uses the resized pool. It also verifies that a delayed tooltip whose popup parent has no mapped role leaves the compositor connection usable. Native rendering discards an obsolete-sized frame and asks GacUI to render again. The test also inspects Wayland requests to ensure resizing commits geometry with a matching content buffer, including title/frame changes and resizing during a draw. wGac defers decoration and frame-callback commits while that buffer is pending, preventing resize feedback and window jitter.
 
 `Test_RawElement` also requires Wayland. It checks the concrete raw factory in standard and hosted modes, Cairo clipping/state/path isolation with scale and offsets, interpretor transitions and exactly-once cleanup, fixed-data Clock/Touching pixels, and remote collection cleanup plus interpretor-only/data-only repaint. Native remote lifecycle checks run in standard mode, where the renderer owns a real native window.
 
