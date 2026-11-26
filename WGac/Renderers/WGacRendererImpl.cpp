@@ -5,6 +5,7 @@
 #include "../WGacGacView.h"
 #include "../Wayland/WaylandDisplay.h"
 #include "../Services/WGacImageService.h"
+#include <algorithm>
 #include <clocale>
 #include <functional>
 
@@ -1295,6 +1296,61 @@ void SetWGacResourceManager(IWGacResourceManager* manager)
 }
 
 // Element Renderers
+bool CreateElementShapePath(cairo_t* cr, Rect bounds, ElementShape shape, bool border)
+{
+	cairo_new_path(cr);
+	if (bounds.Width() <= 0 || bounds.Height() <= 0) return false;
+
+	// Keep the existing half-pixel alignment for rectangular borders. Ellipse
+	// borders use the full bounds, matching the Direct2D element renderer.
+	auto inset = border && shape.shapeType != ElementShapeType::Ellipse ? 0.5 : 0.0;
+	auto x = bounds.x1 + inset;
+	auto y = bounds.y1 + inset;
+	auto width = bounds.Width() - 2 * inset;
+	auto height = bounds.Height() - 2 * inset;
+
+	switch (shape.shapeType)
+	{
+	case ElementShapeType::Rectangle:
+		cairo_rectangle(cr, x, y, width, height);
+		break;
+	case ElementShapeType::Ellipse:
+		cairo_save(cr);
+		cairo_translate(cr, x + width / 2, y + height / 2);
+		cairo_scale(cr, width / 2, height / 2);
+		cairo_arc(cr, 0, 0, 1, 0, 2 * M_PI);
+		cairo_close_path(cr);
+		cairo_restore(cr);
+		break;
+	case ElementShapeType::RoundRect:
+		{
+			auto radiusX = std::clamp<double>(shape.radiusX, 0, width / 2);
+			auto radiusY = std::clamp<double>(shape.radiusY, 0, height / 2);
+			if (radiusX == 0 || radiusY == 0)
+			{
+				cairo_rectangle(cr, x, y, width, height);
+				break;
+			}
+
+			// Build elliptical corners in scaled coordinates, then restore the
+			// transform before filling/stroking so brushes and line widths stay put.
+			cairo_save(cr);
+			cairo_translate(cr, x, y);
+			cairo_scale(cr, radiusX, radiusY);
+			auto right = width / radiusX - 1;
+			auto bottom = height / radiusY - 1;
+			cairo_arc(cr, right, 1, 1, -M_PI / 2, 0);
+			cairo_arc(cr, right, bottom, 1, 0, M_PI / 2);
+			cairo_arc(cr, 1, bottom, 1, M_PI / 2, M_PI);
+			cairo_arc(cr, 1, 1, 1, M_PI, 3 * M_PI / 2);
+			cairo_close_path(cr);
+			cairo_restore(cr);
+		}
+		break;
+	}
+	return true;
+}
+
 class GuiSolidBorderElementRenderer : public GuiElementRendererBase<GuiSolidBorderElement, GuiSolidBorderElementRenderer, IWGacRenderTarget>
 {
     friend class GuiElementRendererBase<GuiSolidBorderElement, GuiSolidBorderElementRenderer, IWGacRenderTarget>;
@@ -1313,34 +1369,10 @@ public:
         cairo_set_source_rgba(cr, c.r / 255.0, c.g / 255.0, c.b / 255.0, c.a / 255.0);
         cairo_set_line_width(cr, 1);
 
-        auto shape = element->GetShape();
-        switch (shape.shapeType) {
-            case ElementShapeType::Rectangle:
-                cairo_rectangle(cr, bounds.x1 + 0.5, bounds.y1 + 0.5, bounds.Width() - 1, bounds.Height() - 1);
-                cairo_stroke(cr);
-                break;
-            case ElementShapeType::RoundRect:
-            {
-                double degrees = M_PI / 180.0;
-                double radius = shape.radiusX;
-                cairo_new_sub_path(cr);
-                cairo_arc(cr, bounds.x2 - radius - 0.5, bounds.y1 + radius + 0.5, radius, -90 * degrees, 0);
-                cairo_arc(cr, bounds.x2 - radius - 0.5, bounds.y2 - radius - 0.5, radius, 0, 90 * degrees);
-                cairo_arc(cr, bounds.x1 + radius + 0.5, bounds.y2 - radius - 0.5, radius, 90 * degrees, 180 * degrees);
-                cairo_arc(cr, bounds.x1 + radius + 0.5, bounds.y1 + radius + 0.5, radius, 180 * degrees, 270 * degrees);
-                cairo_close_path(cr);
-                cairo_stroke(cr);
-            }
-            break;
-            case ElementShapeType::Ellipse:
-                cairo_save(cr);
-                cairo_translate(cr, bounds.x1 + bounds.Width() / 2.0, bounds.y1 + bounds.Height() / 2.0);
-                cairo_scale(cr, bounds.Width() / 2.0, bounds.Height() / 2.0);
-                cairo_arc(cr, 0, 0, 1, 0, 2 * M_PI);
-                cairo_restore(cr);
-                cairo_stroke(cr);
-                break;
-        }
+		if (CreateElementShapePath(cr, bounds, element->GetShape(), true))
+		{
+			cairo_stroke(cr);
+		}
     }
 
     void OnElementStateChanged() override {}
@@ -1363,34 +1395,10 @@ public:
         Color c = element->GetColor();
         cairo_set_source_rgba(cr, c.r / 255.0, c.g / 255.0, c.b / 255.0, c.a / 255.0);
 
-        auto shape = element->GetShape();
-        switch (shape.shapeType) {
-            case ElementShapeType::Rectangle:
-                cairo_rectangle(cr, bounds.x1, bounds.y1, bounds.Width(), bounds.Height());
-                cairo_fill(cr);
-                break;
-            case ElementShapeType::RoundRect:
-            {
-                double degrees = M_PI / 180.0;
-                double radius = shape.radiusX;
-                cairo_new_sub_path(cr);
-                cairo_arc(cr, bounds.x2 - radius, bounds.y1 + radius, radius, -90 * degrees, 0);
-                cairo_arc(cr, bounds.x2 - radius, bounds.y2 - radius, radius, 0, 90 * degrees);
-                cairo_arc(cr, bounds.x1 + radius, bounds.y2 - radius, radius, 90 * degrees, 180 * degrees);
-                cairo_arc(cr, bounds.x1 + radius, bounds.y1 + radius, radius, 180 * degrees, 270 * degrees);
-                cairo_close_path(cr);
-                cairo_fill(cr);
-            }
-            break;
-            case ElementShapeType::Ellipse:
-                cairo_save(cr);
-                cairo_translate(cr, bounds.x1 + bounds.Width() / 2.0, bounds.y1 + bounds.Height() / 2.0);
-                cairo_scale(cr, bounds.Width() / 2.0, bounds.Height() / 2.0);
-                cairo_arc(cr, 0, 0, 1, 0, 2 * M_PI);
-                cairo_restore(cr);
-                cairo_fill(cr);
-                break;
-        }
+		if (CreateElementShapePath(cr, bounds, element->GetShape(), false))
+		{
+			cairo_fill(cr);
+		}
     }
 
     void OnElementStateChanged() override {}
@@ -1610,8 +1618,10 @@ public:
             cairo_pattern_add_color_stop_rgba(pattern, 1, c2.r / 255.0, c2.g / 255.0, c2.b / 255.0, c2.a / 255.0);
 
             cairo_set_source(cr, pattern);
-            cairo_rectangle(cr, bounds.x1, bounds.y1, bounds.Width(), bounds.Height());
-            cairo_fill(cr);
+			if (CreateElementShapePath(cr, bounds, element->GetShape(), false))
+			{
+				cairo_fill(cr);
+			}
             cairo_pattern_destroy(pattern);
         }
     }

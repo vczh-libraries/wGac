@@ -78,3 +78,27 @@ Fresh owned-buffer captures verified the advancing Clock in standard, hosted and
 Native RPT and remote RVMT regressions passed replacement, takeover and shutdown checks. Standalone `<wGac repo>/test.sh --app:rvmt` with the MiniHTTP host returned the exact greeting `Hello, StandaloneRawPort!`; normal close ended the requester with status 0 and the host with status 1 during channel teardown. All owned processes stopped. Evidence: `<wGac repo>/build/raw-rendering-port-20261125/rpt-native-progress.json`, `<wGac repo>/build/raw-rendering-port-20261125/rvm-native-network-results.json` and `<wGac repo>/build/raw-rendering-port-20261125/standalone-rvmt-result.json`.
 
 The required `<wGac repo>/import.sh` → `<wGac repo>/syncProj.sh` → `<wGac repo>/build.sh` sequence succeeded without generated-source changes. After the build, `Test_RawElement /C` and `Test_RawElement /C --hosted` each reported 8/8 passing cases, including fixed-time outlines/transparency, Touching border/contact pixels, clipping and attachment lifetime. The rebuilt showcase, native renderer and raw-element test binaries were byte-identical to the binaries used for the live checks. Evidence: `<wGac repo>/build/raw-rendering-port-20261125/{import,syncProj,build}.log`, `<wGac repo>/build/raw-rendering-port-20261125/raw-element-{standard,hosted}.log` and `<wGac repo>/build/raw-rendering-port-20261125/binaries-after-build-check.log`.
+
+## Element shape rendering verification, 2026-11-26
+
+WinXPSkin's radio background and selection bullet both request elliptical gradients. `GuiGradientBackgroundElementRenderer` ignored `GetShape()` and always filled a rectangle. The original renderer failed the new ellipse-corner pixel assertion, and xgSkins' hosted application buffers showed the same square fill and green square bullet. Windows and macOS renderer source both honor the requested shape; neither platform was run during this Linux verification.
+
+The shared Cairo shape path now handles gradient backgrounds, solid backgrounds and solid borders. Rounded corners honor both radii and clamp them to the available size. Empty bounds cannot introduce a singular Cairo transform. Rectangle border alignment and the existing full-bounds ellipse border convention are preserved.
+
+| Regression executable | Passing cases |
+| --- | --- |
+| `Test_ElementShapes /C` | 6/6 |
+| `Test_ImageService /C` | 2/2 |
+| `Test_RenderingLifecycle /C` | 3/3 |
+| `Test_RawElement /C` | 8/8 |
+| `Test_RawElement /C --hosted` | 8/8 |
+
+The shape regressions cover all three shapes and four gradient directions, unequal corner radii, oversized and zero radii, identical solid/constant-gradient silhouettes, alpha, clipping, retained transforms and empty bounds followed by another element. Logs are `<wGac repo>/build/element-shapes-*.log`.
+
+xgSkins imported the platform change without editing any skin source. Fresh hosted and multi-window runs passed exclusive radio selection, hover/press, radio-style lists, and preservation of selection and list data across Win7Skin, Win8Skin, DarkSkin and WinXPSkin. Application-buffer captures were inspected for radio circles, the Elements gallery, buttons, tabs, scrollbars, full progress, ribbon, toolstrip and calendar. Both final runs closed through the Exit page with status 0. Evidence is under `<xgSkins repo>/scripts/Linux/.build/shape-verification`, including `before-hosted-*`, `after-hosted-*`, `xg-results.json`, `xg-suite.log` and `xg-{hosted,standard}-*.png`.
+
+wGac's native standard and hosted Elements pages also displayed the correct silhouettes. Remote RPT passed button activation, grid population/clear, retained state after replacement/takeover, and canceled/accepted normal close. Remote FCT retained the Elements page and changed palette after replacement/takeover; application-buffer captures showed correctly shaped gradients. The standalone RVM requester with the MiniHTTP host returned exactly `Hello, Shapes[Ab]{Cd}!` and closed normally. All owned test processes were stopped. Evidence: `integration-results.json`, `integration.log`, `remote-elements-*.png` and `rvm-local-*` in the same xgSkins evidence directory.
+
+The additional element audit found that `GuiInnerShadowElementRenderer::Render` is still an unimplemented stub: its three gallery samples are blank. This existing limitation is documented in both READMEs and is not used by WinXPSkin. Verification used application automation and owned drawing buffers; it does not establish physical desktop input or compositor screenshot behavior.
+
+The required wGac `import.sh` → `syncProj.sh` → `build.sh` sequence completed successfully with no imported or generated-source changes. The rebuilt native showcase, renderer, RVM requester and all five tested executables matched the tested binaries byte for byte (`build/element-shapes-binary-check.log`). xgSkins' Linux import, synchronization and build also succeeded, and its `Import/WGac` and `Import/WGacShared` snapshots match the final upstream directories.

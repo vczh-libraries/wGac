@@ -140,9 +140,12 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 ./build/WGacTest/bin/Test_ClipboardService /C
 ./build/WGacTest/bin/Test_GlobalShortcuts /C
 ./build/WGacTest/bin/Test_RenderingLifecycle /C
+./build/WGacTest/bin/Test_ElementShapes /C
 ./build/WGacTest/bin/Test_RawElement /C
 ./build/WGacTest/bin/Test_RawElement /C --hosted
 ```
+
+`Test_ElementShapes` 使用已注册的元素渲染器和离屏 Cairo 表面，验证矩形、椭圆及圆角矩形填充、四种渐变方向、独立的圆角半径、边框对齐、裁剪、透明度、变换和空尺寸。渲染器初始化需要 Wayland 显示连接。
 
 `Test_RenderingLifecycle` 需要可用的 Wayland 显示连接。它验证绘制期间改变尺寸会保留正在使用的 Cairo 缓冲区，并且下一次绘制使用调整后的缓冲池。它还验证延迟创建工具提示时，如果父弹出窗口已没有映射的角色，合成器连接仍保持可用。原生渲染会丢弃尺寸已过时的帧，并要求 GacUI 重新绘制。测试还检查实际发送的 Wayland 请求，确保调整尺寸时，窗口几何与尺寸匹配的内容缓冲区一起提交，覆盖标题和边框切换以及绘制期间调整尺寸。等待匹配缓冲区时，wGac 延迟装饰和帧回调引起的提交，避免尺寸反馈和窗口抖动。
 
@@ -258,6 +261,7 @@ Core 监听 8888 端口。Wayland 渲染器通过 `/MiniHttp` 连接，默认在
 
 ## 已知限制
 
+- `GuiInnerShadowElement` 尚未实现渲染，因此 Misc / Elements 中的阴影示例仍为空白。
 - 终端输入有独立的修饰键和快捷键限制；请参阅[终端输入限制](#终端输入限制)，了解 Kitty 的使用方式及仍然存在的限制。
 - 原生对话框：
   - 打开和保存文件已实现原生 FileChooser Portal。

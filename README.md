@@ -140,9 +140,12 @@ Run the native service regressions after building:
 ./build/WGacTest/bin/Test_ClipboardService /C
 ./build/WGacTest/bin/Test_GlobalShortcuts /C
 ./build/WGacTest/bin/Test_RenderingLifecycle /C
+./build/WGacTest/bin/Test_ElementShapes /C
 ./build/WGacTest/bin/Test_RawElement /C
 ./build/WGacTest/bin/Test_RawElement /C --hosted
 ```
+
+`Test_ElementShapes` uses the registered element renderers with offscreen Cairo surfaces. It checks rectangle, ellipse and rounded-rectangle fills, all four gradient directions, independent corner radii, border alignment, clipping, alpha, transforms and empty bounds. Renderer initialization requires a Wayland display connection.
 
 `Test_RenderingLifecycle` requires an available Wayland display. It checks that resizing during a draw preserves the active Cairo buffer and that the next draw uses the resized pool. It also verifies that a delayed tooltip whose popup parent has no mapped role leaves the compositor connection usable. Native rendering discards an obsolete-sized frame and asks GacUI to render again. The test also inspects Wayland requests to ensure resizing commits geometry with a matching content buffer, including title/frame changes and resizing during a draw. wGac defers decoration and frame-callback commits while that buffer is pending, preventing resize feedback and window jitter.
 
@@ -300,6 +303,7 @@ Left/right brackets and shifted braces map to `KEY_LEFT_BRACKET` (`0xDB`) and
 
 ## Known Limitations
 
+- `GuiInnerShadowElement` rendering is not implemented; the shadow samples on Misc / Elements remain blank.
 - Terminal input has separate modifier and shortcut limitations; see [Terminal input limitations](#terminal-input-limitations) for the Kitty setup and remaining restrictions.
 - Native Dialogs:
   - The native FileChooser portal is implemented for open and save dialogs.
