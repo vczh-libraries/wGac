@@ -17,6 +17,7 @@ REPOSITORIES=(
     Release
     Tools
     wGac
+    xgSkins
 )
 
 red_error() {
