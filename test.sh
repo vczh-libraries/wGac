@@ -7,6 +7,8 @@ APP_NAME=""
 HOSTED=0
 UNBLOCK=0
 INJECTION_ARGUMENTS=()
+CORE_ARGUMENTS=()
+CORE_MODE=""
 PORT=""
 CORE_HOST="localhost"
 CORE_HOST_SPECIFIED=0
@@ -18,7 +20,8 @@ Usage:
   ./test.sh --app:fct [--hosted] [--unblock]
   ./test.sh --app:tui
   ./test.sh --app:rvmt [--unblock]
-  ./test.sh --app:renderer [--corehost:<host>] [--port:<1-65535>] [--remoteDT] [--remoteLocale] [--remoteFS] [--unblock]
+  ./test.sh --app:core [/FCT|/RPT|/RVMT] [/Cli:<command>] [--remoteDT] [--remoteLocale] [--remoteFS] [--fakeClipboard] [--denyClipboard] [--unblock]
+  ./test.sh --app:renderer [--corehost:<host>] [--port:<1-65535>] [--remoteDT] [--remoteLocale] [--remoteFS] [--denyClipboard] [--unblock]
 EOF
 }
 
@@ -36,13 +39,26 @@ for argument in "$@"; do
         --app:rvmt)
             APP_NAME="rvmt"
             ;;
+        --app:core)
+            APP_NAME="core"
+            ;;
+        /FCT|/RPT|/RVMT)
+            if [[ -n "$CORE_MODE" ]]; then echo "Choose one Core application." >&2; exit 1; fi
+            CORE_MODE="$argument"
+            ;;
+        /Cli:*)
+            CORE_ARGUMENTS+=("$argument")
+            ;;
+        --fakeClipboard)
+            CORE_ARGUMENTS+=(/fakeClipboard)
+            ;;
         --app:renderer)
             APP_NAME="renderer"
             ;;
         --hosted)
             HOSTED=1
             ;;
-        --remoteDT|--remoteLocale|--remoteFS)
+        --remoteDT|--remoteLocale|--remoteFS|--denyClipboard)
             INJECTION_ARGUMENTS+=("/${argument#--}")
             ;;
         --unblock)
@@ -101,6 +117,13 @@ case "$APP_NAME" in
         fi
         APP="$SCRIPT_DIR/build/WGacCppTestRvm/bin/Test_CppTest_Rvm"
         ;;
+    core)
+        if [[ "$HOSTED" -eq 1 ]]; then
+            echo "--hosted is only supported by --app:fct." >&2
+            exit 1
+        fi
+        APP="$SCRIPT_DIR/build/RemotingTest_Core/bin/RemotingTest_Core"
+        ;;
     renderer)
         if [[ "$HOSTED" -eq 1 ]]; then
             echo "--hosted is only supported by --app:fct." >&2
@@ -114,8 +137,13 @@ case "$APP_NAME" in
         ;;
 esac
 
-if [[ "${#INJECTION_ARGUMENTS[@]}" -gt 0 && "$APP_NAME" != "renderer" ]]; then
-    echo "Remote injection options require --app:renderer." >&2
+if [[ "$APP_NAME" != "core" && ( -n "$CORE_MODE" || ${#CORE_ARGUMENTS[@]} -gt 0 ) ]]; then
+    echo "Core application, /Cli and --fakeClipboard options require --app:core." >&2
+    exit 1
+fi
+
+if [[ "${#INJECTION_ARGUMENTS[@]}" -gt 0 && "$APP_NAME" != "renderer" && "$APP_NAME" != "core" ]]; then
+    echo "Remote injection options require --app:core or --app:renderer." >&2
     exit 1
 fi
 
@@ -134,20 +162,21 @@ if [[ ! -x "$APP" ]]; then
     exit 1
 fi
 
-# The GlobalShortcuts portal requires an installed desktop identity even when
-# a development app starts from a terminal. Keep separate consent per test app.
-export WGAC_APPLICATION_ID="org.gaclib.wGac.$APP_NAME"
-WGAC_DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-mkdir -p "$WGAC_DESKTOP_DIR"
-WGAC_DESKTOP_EXEC="$APP"
-WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\\/\\\\}"
-WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\"/\\\"}"
-WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\$/\\\$}"
-WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\`/\\\`}"
-WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//%/%%}"
-# Desktop entry strings have an additional backslash-unescaping layer.
-WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\\/\\\\}"
-cat > "$WGAC_DESKTOP_DIR/$WGAC_APPLICATION_ID.desktop" <<EOF
+if [[ "$APP_NAME" != "core" ]]; then
+    # The GlobalShortcuts portal requires an installed desktop identity even when
+    # a development app starts from a terminal. Keep separate consent per test app.
+    export WGAC_APPLICATION_ID="org.gaclib.wGac.$APP_NAME"
+    WGAC_DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    mkdir -p "$WGAC_DESKTOP_DIR"
+    WGAC_DESKTOP_EXEC="$APP"
+    WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\\/\\\\}"
+    WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\"/\\\"}"
+    WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\$/\\\$}"
+    WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\`/\\\`}"
+    WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//%/%%}"
+    # Desktop entry strings have an additional backslash-unescaping layer.
+    WGAC_DESKTOP_EXEC="${WGAC_DESKTOP_EXEC//\\/\\\\}"
+    cat > "$WGAC_DESKTOP_DIR/$WGAC_APPLICATION_ID.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=wGac $APP_NAME
@@ -155,34 +184,27 @@ Exec="$WGAC_DESKTOP_EXEC"
 NoDisplay=true
 Terminal=$([[ "$APP_NAME" == "tui" ]] && echo true || echo false)
 EOF
+fi
 
+arguments=()
+case "$APP_NAME" in
+    core)
+        arguments=(/MiniHttp "${CORE_MODE:-/FCT}")
+        if (( ${#CORE_ARGUMENTS[@]} )); then arguments+=("${CORE_ARGUMENTS[@]}"); fi
+        ;;
+    renderer)
+        arguments=(/MiniHttp "/corehost:$CORE_HOST")
+        if [[ -n "$PORT" ]]; then arguments+=("/port:$PORT"); fi
+        ;;
+    rvmt) arguments=(/MiniHttp) ;;
+    fct) if [[ "$HOSTED" -eq 1 ]]; then arguments=(--hosted); fi ;;
+esac
+if (( ${#INJECTION_ARGUMENTS[@]} )); then arguments+=("${INJECTION_ARGUMENTS[@]}"); fi
+
+# The conditional expansion also supports empty arrays in macOS Bash 3.2 with nounset.
 if [[ "$UNBLOCK" -eq 1 ]]; then
-    if [[ "$HOSTED" -eq 1 ]]; then
-        "$APP" --hosted &
-    elif [[ "$APP_NAME" == "renderer" ]]; then
-        RENDERER_ARGUMENTS=(/MiniHttp "/corehost:$CORE_HOST" "${INJECTION_ARGUMENTS[@]}")
-        if [[ -n "$PORT" ]]; then
-            RENDERER_ARGUMENTS+=("/port:$PORT")
-        fi
-        "$APP" "${RENDERER_ARGUMENTS[@]}" &
-    elif [[ "$APP_NAME" == "rvmt" ]]; then
-        "$APP" /MiniHttp &
-    else
-        "$APP" &
-    fi
+    "$APP" ${arguments[@]+"${arguments[@]}"} &
     echo $!
 else
-    if [[ "$HOSTED" -eq 1 ]]; then
-        exec "$APP" --hosted
-    elif [[ "$APP_NAME" == "renderer" ]]; then
-        RENDERER_ARGUMENTS=(/MiniHttp "/corehost:$CORE_HOST" "${INJECTION_ARGUMENTS[@]}")
-        if [[ -n "$PORT" ]]; then
-            RENDERER_ARGUMENTS+=("/port:$PORT")
-        fi
-        exec "$APP" "${RENDERER_ARGUMENTS[@]}"
-    elif [[ "$APP_NAME" == "rvmt" ]]; then
-        exec "$APP" /MiniHttp
-    else
-        exec "$APP"
-    fi
+    exec "$APP" ${arguments[@]+"${arguments[@]}"}
 fi

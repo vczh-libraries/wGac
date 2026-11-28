@@ -17,6 +17,7 @@ namespace {
     const char* TEXT_MIME_UTF8 = "text/plain;charset=utf-8";
     const char* TEXT_MIME_UTF8_ALT = "UTF8_STRING";
     const char* TEXT_MIME_STRING = "STRING";
+    const char* DOCUMENT_MIME = "application/x-gacui-document";
     const char* IMAGE_MIME_PNG = "image/png";
 
     // Data offer listener
@@ -212,7 +213,12 @@ public:
             if (!hasImage) snapshot->image = GetImageFromSingleImageDocument(document);
         }
         if (hasImage) snapshot->image = image;
+        auto documentBytes = snapshot->document ? Ptr(new stream::MemoryStream) : nullptr;
+        if (documentBytes) SaveDocumentToClipboardStream(snapshot->document, *documentBytes.Obj());
         auto* display = GetWaylandDisplay();
+        auto serial = display && display->GetWaylandSeat() ? display->GetWaylandSeat()->GetLastInputSerial() : 0;
+        bool canPublish = serial && display->GetDataDeviceManager() && display->GetDataDevice();
+        if (service->require_system_write && !canPublish) return false;
         std::unique_lock<std::mutex> lock(service->mutex);
 
         // Destroy previous source
@@ -224,14 +230,13 @@ public:
         service->local_clipboard = snapshot;
         service->pending_text = WStringToUtf8(snapshot->GetText());
         service->pending_image = snapshot->image;
+        service->pending_document = documentBytes;
         service->local_mime = "application/x-gacui-selection-" + std::to_string(getpid())
             + "-" + std::to_string(++service->selection_version);
 
         // Automation has no compositor input serial. Keep its copy process-local;
         // ordinary input additionally publishes the standard external formats.
-        auto serial = display && display->GetWaylandSeat()
-            ? display->GetWaylandSeat()->GetLastInputSerial() : 0;
-        if (serial && display->GetDataDeviceManager() && display->GetDataDevice()) {
+        if (canPublish) {
             service->current_source = wl_data_device_manager_create_data_source(display->GetDataDeviceManager());
             CHECK_ERROR(service->current_source, L"Failed to create the Wayland clipboard source.");
             wl_data_source_add_listener(service->current_source, &data_source_listener, service);
@@ -242,6 +247,7 @@ public:
                 wl_data_source_offer(service->current_source, TEXT_MIME_UTF8_ALT);
                 wl_data_source_offer(service->current_source, TEXT_MIME_STRING);
             }
+            if (documentBytes) wl_data_source_offer(service->current_source, DOCUMENT_MIME);
             if (snapshot->ContainsImage()) wl_data_source_offer(service->current_source, IMAGE_MIME_PNG);
             wl_data_device_set_selection(display->GetDataDevice(), service->current_source, serial);
             display->Flush();
@@ -257,125 +263,43 @@ public:
 // WGacClipboardReader implementation
 class WGacClipboardReader : public Object, public INativeClipboardReader
 {
-private:
     WGacClipboardService* service;
+    wl_data_offer* offer;
+    WGacClipboardService::Formats formats;
 
-public:
-    WGacClipboardReader(WGacClipboardService* _service) : service(_service) {}
-
-    bool ContainsText() override
+    std::vector<char> Read(const std::string& mime)
     {
-        std::lock_guard<std::mutex> lock(service->mutex);
-        return service->offer_has_text;
-    }
-
-    WString GetText() override
-    {
-        wl_data_offer* offer = nullptr;
-        std::string mime;
-
-        // Copy what we need under the lock, then release before Wayland calls
-        // to avoid deadlock when data_source_send callback tries to acquire mutex
+        if (mime.empty()) return {};
+        int descriptors[2];
         {
             std::lock_guard<std::mutex> lock(service->mutex);
-            if (!service->current_offer || service->offer_text_mime.empty()) {
-                return L"";
-            }
-            offer = service->current_offer;
-            mime = service->offer_text_mime;
+            if (!offer || offer != service->current_offer || pipe(descriptors) < 0) return {};
+            wl_data_offer_receive(offer, mime.c_str(), descriptors[1]);
+            close(descriptors[1]);
         }
-
-        // Create pipe to receive data
-        int pipefd[2];
-        if (pipe(pipefd) < 0) {
-            return L"";
-        }
-
-        // Request data (no lock held - avoids deadlock with data_source_send)
-        wl_data_offer_receive(offer, mime.c_str(), pipefd[1]);
-        close(pipefd[1]); // Close write end
-
-        // Need to flush and dispatch to actually receive data
-        auto* display = GetWaylandDisplay();
-        if (display) {
-            display->Flush();
-            display->Roundtrip();
-        }
-
-        // Read data
-        auto data = ReadFromFd(pipefd[0]);
-        return Utf8ToWString(data);
+        GetWaylandDisplay()->Flush();
+        return ReadFromFd(descriptors[0]);
     }
+public:
+    WGacClipboardReader(WGacClipboardService* owner)
+        : service(owner), offer(owner->current_offer), formats(owner->current_formats) {}
 
-    bool ContainsDocument() override
-    {
-        // We could support RTF/HTML here in the future
-        return false;
-    }
-
+    bool ContainsText() override { return !formats.text.empty(); }
+    WString GetText() override { return Utf8ToWString(Read(formats.text)); }
+    bool ContainsDocument() override { return formats.document; }
     Ptr<DocumentModel> GetDocument() override
     {
-        return Ptr<DocumentModel>();
+        auto bytes = Read(formats.document ? DOCUMENT_MIME : "");
+        if (bytes.empty()) return nullptr;
+        stream::MemoryWrapperStream input(bytes.data(), static_cast<vint>(bytes.size()));
+        return LoadDocumentFromClipboardStream(input);
     }
-
-    bool ContainsImage() override
-    {
-        std::lock_guard<std::mutex> lock(service->mutex);
-        return service->offer_has_image;
-    }
-
+    bool ContainsImage() override { return formats.image; }
     Ptr<INativeImage> GetImage() override
     {
-        wl_data_offer* offer = nullptr;
-        std::string mime;
-
-        // Copy what we need under the lock, then release before Wayland calls
-        // to avoid deadlock when data_source_send callback tries to acquire mutex
-        {
-            std::lock_guard<std::mutex> lock(service->mutex);
-            if (!service->current_offer || service->offer_image_mime.empty()) {
-                return Ptr<INativeImage>();
-            }
-            offer = service->current_offer;
-            mime = service->offer_image_mime;
-        }
-
-        // Create pipe to receive data
-        int pipefd[2];
-        if (pipe(pipefd) < 0) {
-            return Ptr<INativeImage>();
-        }
-
-        // Request data (no lock held - avoids deadlock with data_source_send)
-        wl_data_offer_receive(offer, mime.c_str(), pipefd[1]);
-        close(pipefd[1]);
-
-        auto* display = GetWaylandDisplay();
-        if (display) {
-            display->Flush();
-            display->Roundtrip();
-        }
-
-        // Read PNG data
-        auto data = ReadFromFd(pipefd[0]);
-        if (data.empty()) {
-            return Ptr<INativeImage>();
-        }
-
-        // Load image from PNG data using image service
-        auto* controller = GetCurrentController();
-        if (controller) {
-            auto* imageService = controller->ImageService();
-            if (imageService) {
-                // Create a memory stream from the PNG data
-                stream::MemoryStream memStream;
-                memStream.Write(data.data(), data.size());
-                memStream.SeekFromBegin(0);
-                return imageService->CreateImageFromStream(memStream);
-            }
-        }
-
-        return Ptr<INativeImage>();
+        auto bytes = Read(formats.image ? IMAGE_MIME_PNG : "");
+        if (bytes.empty()) return nullptr;
+        return GetCurrentController()->ImageService()->CreateImageFromMemory(bytes.data(), static_cast<vint>(bytes.size()));
     }
 };
 
@@ -412,25 +336,20 @@ void WGacClipboardService::data_device_drop(void* /*data*/, wl_data_device* /*de
 void WGacClipboardService::data_device_selection(void* data, wl_data_device* /*device*/, wl_data_offer* offer)
 {
     auto* self = static_cast<WGacClipboardService*>(data);
-    std::lock_guard<std::mutex> lock(self->mutex);
+    std::unique_lock<std::mutex> lock(self->mutex);
 
     // Destroy old offer
     if (self->current_offer && self->current_offer != offer) {
-        self->local_offers.erase(self->current_offer);
+        self->offers.erase(self->current_offer);
         wl_data_offer_destroy(self->current_offer);
     }
 
     self->current_offer = offer;
-    if ((offer && !self->local_offers.contains(offer)) || (!offer && !self->current_source)) {
-        self->local_clipboard = nullptr;
-    }
-    // Note: offer_has_text/offer_has_image were already set in data_offer_offer
-    // but we need to reset them if offer is null
-    if (!offer) {
-        self->offer_has_text = false;
-        self->offer_has_image = false;
-        self->offer_text_mime.clear();
-        self->offer_image_mime.clear();
+    self->current_formats = offer ? self->offers[offer] : Formats{};
+    if ((offer && !self->current_formats.local) || (!offer && !self->current_source)) self->local_clipboard = nullptr;
+    lock.unlock();
+    if (auto* controller = GetWGacController()) {
+        controller->CallbackService()->Invoker()->InvokeClipboardUpdated();
     }
 }
 
@@ -440,20 +359,11 @@ void WGacClipboardService::data_offer_offer(void* data, wl_data_offer* offer, co
     auto* self = static_cast<WGacClipboardService*>(data);
     std::lock_guard<std::mutex> lock(self->mutex);
 
-    if (mime_type == self->local_mime) self->local_offers.insert(offer);
-
-    if (IsSupportedTextMime(mime_type)) {
-        self->offer_has_text = true;
-        // Prefer UTF-8 mime type
-        if (self->offer_text_mime.empty() ||
-            strcmp(mime_type, TEXT_MIME_UTF8) == 0) {
-            self->offer_text_mime = mime_type;
-        }
-    }
-    if (IsSupportedImageMime(mime_type)) {
-        self->offer_has_image = true;
-        self->offer_image_mime = mime_type;
-    }
+    auto& formats = self->offers[offer];
+    if (mime_type == self->local_mime) formats.local = true;
+    if (IsSupportedTextMime(mime_type) && (formats.text.empty() || strcmp(mime_type, TEXT_MIME_UTF8) == 0)) formats.text = mime_type;
+    if (IsSupportedImageMime(mime_type)) formats.image = true;
+    if (strcmp(mime_type, DOCUMENT_MIME) == 0) formats.document = true;
 }
 
 void WGacClipboardService::data_offer_source_actions(void* /*data*/, wl_data_offer* /*offer*/, uint32_t /*actions*/)
@@ -472,12 +382,15 @@ void WGacClipboardService::data_source_target(void* /*data*/, wl_data_source* /*
     // Target accepted/rejected mime type - informational only
 }
 
-void WGacClipboardService::data_source_send(void* data, wl_data_source* /*source*/, const char* mime_type, int32_t fd)
+void WGacClipboardService::data_source_send(void* data, wl_data_source* source, const char* mime_type, int32_t fd)
 {
     auto* self = static_cast<WGacClipboardService*>(data);
     std::lock_guard<std::mutex> lock(self->mutex);
 
-    if (IsSupportedTextMime(mime_type) && !self->pending_text.empty()) {
+    if (source != self->current_source) { close(fd); return; }
+    if (strcmp(mime_type, DOCUMENT_MIME) == 0 && self->pending_document) {
+        WriteToFd(fd, static_cast<const char*>(self->pending_document->GetInternalBuffer()), self->pending_document->Size());
+    } else if (IsSupportedTextMime(mime_type)) {
         WriteToFd(fd, self->pending_text.c_str(), self->pending_text.size());
     } else if (IsSupportedImageMime(mime_type) && self->pending_image) {
         stream::MemoryStream memStream;
@@ -506,6 +419,7 @@ void WGacClipboardService::data_source_cancelled(void* data, wl_data_source* sou
         self->current_source = nullptr;
         self->pending_text.clear();
         self->pending_image = nullptr;
+        self->pending_document = nullptr;
         self->local_clipboard = nullptr;
     }
 }
@@ -550,7 +464,9 @@ void WGacClipboardService::Cleanup()
     pending_text.clear();
     pending_image = nullptr;
     local_clipboard = nullptr;
-    local_offers.clear();
+    pending_document = nullptr;
+    offers.clear();
+    current_formats = {};
 }
 
 void WGacClipboardService::Initialize()

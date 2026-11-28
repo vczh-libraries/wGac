@@ -5,15 +5,15 @@
 
 namespace vl::presentation::wayland
 {
-	class TuiWGacClipboardService : public Object, public INativeClipboardService
+	class TuiWGacClipboardService : public Object, public INativeClipboardService, public IGuiRemoteClipboardEventSource
 	{
 		class Impl;
 		Ptr<Impl>					impl;
 
 	public:
-		TuiWGacClipboardService();
+		explicit TuiWGacClipboardService(bool allowPrivateClipboard = true);
 		~TuiWGacClipboardService();
-		bool						PumpEvents();
+		bool						PumpClipboardEvents() override;
 		Ptr<INativeClipboardReader>	ReadClipboard() override;
 		Ptr<INativeClipboardWriter>	WriteClipboard() override;
 	};

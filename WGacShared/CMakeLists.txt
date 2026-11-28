@@ -11,6 +11,19 @@ endif()
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 
+# FindX11 keeps successful searches cached even after a temporary sysroot is
+# removed. Rediscover missing paths before creating its imported targets.
+get_cmake_property(WGAC_X11_CACHE_VARIABLES CACHE_VARIABLES)
+foreach(WGAC_X11_CACHE_VARIABLE IN LISTS WGAC_X11_CACHE_VARIABLES)
+    if(WGAC_X11_CACHE_VARIABLE MATCHES "^X11_.*(_INCLUDE_PATH|_LIB)$")
+        if(IS_ABSOLUTE "${${WGAC_X11_CACHE_VARIABLE}}" AND NOT EXISTS "${${WGAC_X11_CACHE_VARIABLE}}")
+            unset("${WGAC_X11_CACHE_VARIABLE}" CACHE)
+        endif()
+    endif()
+endforeach()
+
+find_package(X11 REQUIRED COMPONENTS Xfixes)
+
 set(WGAC_PKG_CONFIG_CONTEXT
     "${PKG_CONFIG_EXECUTABLE}|$ENV{PKG_CONFIG_PATH}|$ENV{PKG_CONFIG_LIBDIR}|$ENV{PKG_CONFIG_SYSROOT_DIR}"
 )
@@ -61,6 +74,8 @@ set(WGAC_FILES
     "../WGac/Wayland/WaylandBuffer.cpp"
     "../WGac/Wayland/WaylandSeat.cpp"
     "../WGac/WGacController.cpp"
+    "../WGac/TUI/TuiWGacClipboardService.cpp"
+    "../WGac/WGacRemoteApplication.cpp"
     "../WGac/WGacNativeWindow.cpp"
     "../WGac/WGacGacView.cpp"
     "../WGac/WGacWindow.cpp"
@@ -95,6 +110,7 @@ target_include_directories(WGac PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../WGac/Protocol"
 )
 target_link_libraries(WGac PUBLIC
+    X11::X11 X11::Xfixes
     GacUI
     PkgConfig::WAYLAND
     PkgConfig::XKB

@@ -65,7 +65,7 @@ namespace vl::presentation::wayland
 		void PumpPlatformEvents() override
 		{
 			inputService.PumpEvents();
-			if (clipboardService.PumpEvents()) ClipboardUpdated();
+			if (clipboardService.PumpClipboardEvents()) ClipboardUpdated();
 		}
 
 	public:

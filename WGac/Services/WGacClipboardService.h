@@ -5,7 +5,7 @@
 #include <wayland-client.h>
 #include <string>
 #include <mutex>
-#include <unordered_set>
+#include <unordered_map>
 
 namespace vl {
 namespace presentation {
@@ -19,10 +19,16 @@ class WGacClipboardService : public Object, public INativeClipboardService
 private:
     // Current clipboard offer from compositor (for reading)
     wl_data_offer* current_offer = nullptr;
-    bool offer_has_text = false;
-    bool offer_has_image = false;
-    std::string offer_text_mime;
-    std::string offer_image_mime;
+    struct Formats
+    {
+        std::string text;
+        bool image = false;
+        bool document = false;
+        bool local = false;
+    };
+    Formats current_formats;
+    std::unordered_map<wl_data_offer*, Formats> offers;
+    bool require_system_write = false;
 
     // Current data source (for writing - we own this)
     wl_data_source* current_source = nullptr;
@@ -31,7 +37,7 @@ private:
     Ptr<INativeClipboardReader> local_clipboard;
     std::string local_mime;
     vuint64_t selection_version = 0;
-    std::unordered_set<wl_data_offer*> local_offers;
+    Ptr<stream::MemoryStream> pending_document;
 
     std::mutex mutex;
 
@@ -63,6 +69,7 @@ public:
     virtual ~WGacClipboardService();
 
     void Initialize();
+    void RequireSystemWrites() { require_system_write = true; }
     void Cleanup();  // Call before display disconnect
 
     Ptr<INativeClipboardReader> ReadClipboard() override;
