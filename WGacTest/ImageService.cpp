@@ -99,6 +99,45 @@ TEST_FILE
         }
         TEST_ASSERT(converted[0] == 0);
     });
+
+    TEST_CASE(L"Repeated PNG roundtrips preserve every premultiplied channel and alpha")
+    {
+        // Each alpha row covers every valid premultiplied channel value.
+        auto* source = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 256, 256);
+        TEST_ASSERT(cairo_surface_status(source) == CAIRO_STATUS_SUCCESS);
+        collections::Array<uint32_t> original(256 * 256);
+        for (uint32_t a = 0; a < 256; a++) {
+            auto* row = reinterpret_cast<uint32_t*>(
+                cairo_image_surface_get_data(source) + a * cairo_image_surface_get_stride(source));
+            for (uint32_t x = 0; x < 256; x++) {
+                auto r = x % (a + 1);
+                auto g = a - r;
+                auto b = (x * 37) % (a + 1);
+                row[x] = original[a * 256 + x] = (a << 24) | (r << 16) | (g << 8) | b;
+            }
+        }
+        cairo_surface_mark_dirty(source);
+
+        WGacImageService service;
+        Ptr<vl::presentation::INativeImage> image = Ptr(new WGacImage(&service, source));
+        for (vint cycle = 0; cycle < 5; cycle++) {
+            stream::MemoryStream encoded;
+            image->SaveToStream(encoded, vl::presentation::INativeImage::Png);
+            TEST_ASSERT(encoded.Size() > 0);
+            encoded.SeekFromBegin(0);
+            image = service.CreateImageFromStream(encoded);
+            TEST_ASSERT(image && image->GetFrameCount() == 1);
+            auto* frame = dynamic_cast<WGacImageFrame*>(image->GetFrame(0));
+            TEST_ASSERT(frame && frame->GetSize() == vl::presentation::Size(256, 256));
+            auto* surface = frame->GetSurface();
+            cairo_surface_flush(surface);
+            for (vint y = 0; y < 256; y++) {
+                auto* row = reinterpret_cast<const uint32_t*>(
+                    cairo_image_surface_get_data(surface) + y * cairo_image_surface_get_stride(surface));
+                for (vint x = 0; x < 256; x++) TEST_ASSERT(row[x] == original[y * 256 + x]);
+            }
+        }
+    });
 }
 
 int main(int argc, char* argv[])

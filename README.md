@@ -133,7 +133,7 @@ The root CMake project uses C++23 and builds:
 
 Run the native service regressions after building:
 
-`Test_ClipboardService` covers process-local text, rich document and image readback without a desktop input serial, and retirement of an unpublished copy when the compositor clears the selection. Ordinary native copy also publishes text/image formats to Wayland; rich document objects stay within the owning process.
+`Test_ClipboardService` covers process-local text, rich document and image readback without a desktop input serial, and retirement of an unpublished copy when the compositor clears the selection. Native copy publishes Unicode text, GacUI rich documents and PNG images to Wayland. A remote clipboard write requires a compositor input serial; its result is returned to Core before Cut deletes the selection.
 
 ```bash
 ./build/WGacTest/bin/Test_AsyncService /C
@@ -154,6 +154,9 @@ Run the native service regressions after building:
 
 These tests cover pending work during nested modal pumping and cancellation when a callback stops the service.
 Image tests cover disabled grayscale rendering, all 256 alpha values, transparent compositing, cache reuse, and preservation of the original image. Disabled images use the same lightened grayscale conversion as Windows and macOS, with unchanged alpha. The converted surface is created on demand in an `INativeImageFrameCache` owned by the frame and shared by its renderers.
+
+PNG encoding and decoding round both alpha conversions to the nearest channel value. Repeated clipboard or private-document roundtrips preserve the Cairo pixels without progressively darkening translucent images. The image tests cover five PNG roundtrips across every alpha and valid premultiplied channel value.
+
 Global-shortcut tests use an isolated D-Bus session (`dbus-daemon`, installed by the prerequisite script) and a mock portal to cover application registration, early responses, modifier encoding, multiple shortcuts, activation on the UI thread, duplicate/invalid registrations, denial, cancellation and removal. They do not grant desktop permissions or replace live desktop verification.
 
 ## Custom Cairo Drawing, Raw Clock and Touching
@@ -244,7 +247,7 @@ Always stop background test processes when verification is complete.
 
 `WGac/TUI` composes `TuiControllerBase` with the existing wGac font/cursor, key-name and image services. Timers use the VlppOS owner-thread pump, and all windows and dialogs render in terminal cells. No Wayland surface or libdecor window is created. Font metrics remain `TuiFont`, size 1. The terminal determines displayed fonts and colors.
 
-The TUI clipboard uses X11 selections (`libx11-dev` and `libxfixes-dev` are build prerequisites). On a Wayland desktop, XWayland supplies the bridge to other desktop applications; keep `DISPLAY` available. Without an X display, clipboard objects remain process-local. External transfers use UTF-8 text; rich documents and images remain available within the application. XFixes ownership notifications update clipboard-dependent commands. The app must remain running while another client reads its selection. Incoming incremental selections are supported; outgoing text must fit the X server's maximum request size.
+The TUI and headless Core clipboard uses X11 selections (`libx11-dev` and `libxfixes-dev` are build prerequisites). On a Wayland desktop, XWayland supplies the bridge to other desktop applications; keep `DISPLAY` available. External transfers support UTF-8 text, GacUI rich documents and PNG images, including incremental selections in both directions. XFixes ownership notifications update clipboard-dependent commands. The app must remain running while another client reads its selection. Without an X display, the TUI retains process-local data; the headless Core rejects OS writes unless `--fakeClipboard` selects its private fallback.
 
 Normal Hide, Close and Stop actions restore terminal input and output modes; terminal-tab close is not the normal shutdown test.
 
@@ -330,7 +333,7 @@ The review on Ubuntu 26.04.1 / GNOME Shell 50.1 identifies **one newly enabled f
 | Native message, color and font dialogs | Still not implemented in `WGacDialogService`; app dialogs continue using `FakeDialogService`. The existing FileChooser portal is not a new feature. |
 | Global positioning of normal Wayland windows | Still compositor-controlled; newer drag protocols do not provide arbitrary positioning. |
 | Platform-frame icon / independent maximize button | libdecor 0.2.5 still has no corresponding APIs. |
-| TUI locale and external rich clipboard | Existing provider restrictions; the desktop upgrade does not implement these paths. |
+| TUI locale | Existing provider restriction; the desktop upgrade does not implement this path. Rich clipboard transfers are supported by the current X11 provider. |
 
 The previously listed title-drag bug no longer reproduces: compositor-delivered dragging of the raw native renderer preserves the pointer's offset from the window corner. The compositor move path was already implemented in wGac commit `96ec017`; this is a corrected historical note, not an additional feature supplied by Ubuntu 26.04. See [the verification record](TestMatrix_Tui.md#ubuntu-2604-review-2026-10-09) for build and live test results.
 ## Remote feature options and document files

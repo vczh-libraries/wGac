@@ -133,7 +133,7 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 
 编译后运行原生服务回归测试：
 
-`Test_ClipboardService` 验证没有桌面输入序列号时，进程内文本、富文档和图像仍可复制读取，以及合成器清空选择时会撤销尚未发布的本地副本。普通原生复制还会向 Wayland 发布文本和图像格式；富文档对象仅保留在持有剪贴板的进程内。
+`Test_ClipboardService` 验证没有桌面输入序列号时，进程内文本、富文档和图像仍可复制读取，以及合成器清空选择时会撤销尚未发布的本地副本。原生复制向 Wayland 发布 Unicode 文本、GacUI 富文档和 PNG 图像。远程剪贴板写入需要合成器输入序列号；写入结果会在剪切删除选区之前返回 Core。
 
 ```bash
 ./build/WGacTest/bin/Test_AsyncService /C
@@ -154,6 +154,9 @@ CMake 会丢弃缓存中已不存在的 X11 头文件目录和库文件路径（
 
 这些测试覆盖嵌套模态消息循环中的待执行任务，以及回调停止服务时对剩余任务的取消。
 图像测试覆盖禁用状态的灰度渲染、全部 256 个 Alpha 值、透明像素合成、缓存复用，以及原始图像保持不变。禁用图像使用与 Windows 和 macOS 相同的提亮灰度转换，并保持 Alpha 不变。转换后的表面按需创建，保存在图像帧持有的 `INativeImageFrameCache` 中，由使用该帧的渲染器共享。
+
+PNG 编码和解码的两个 Alpha 转换都采用四舍五入。反复经过剪贴板或私有文档读写后，Cairo 像素保持不变，半透明图像不会逐渐变暗。图像测试覆盖每个 Alpha 值和有效预乘颜色通道值的五次 PNG 往返读写。
+
 全局快捷键测试使用隔离的 D-Bus 会话（依赖安装脚本包含 `dbus-daemon`）和模拟 Portal，覆盖应用注册、提前到达的响应、修饰键编码、多快捷键、UI 线程触发、重复或无效注册、拒绝、取消和注销。测试不会授予桌面权限，也不能代替真实桌面验证。
 
 ## 自定义 Cairo 绘制、Raw Clock 和 Touching
@@ -290,7 +293,7 @@ GNOME 从 [GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts) 
 | 原生消息、颜色及字体对话框 | `WGacDialogService` 仍未实现；应用对话框继续使用 `FakeDialogService`。已有的 FileChooser Portal 不计为新功能。 |
 | 普通 Wayland 窗口的全局定位 | 仍由合成器控制；较新的拖动协议不提供任意定位。 |
 | 平台边框图标 / 独立最大化按钮 | libdecor 0.2.5 仍没有对应 API。 |
-| TUI locale 及外部富文本剪贴板 | 属于现有 provider 限制，桌面升级不会实现这些路径。 |
+| TUI locale | 属于现有 provider 限制，桌面升级不会实现该路径。当前 X11 provider 已支持富文档剪贴板传输。 |
 
 此前列出的标题栏拖动缺陷已无法复现：通过合成器发送输入拖动原生远程渲染器时，鼠标相对窗口左上角的偏移保持不变。wGac 的 `96ec017` 提交已经实现合成器移动路径，因此这里只修正历史记录，不将其计为 Ubuntu 26.04 新增功能。构建及真实桌面测试结果请参阅[验证记录](TestMatrix_Tui.md#ubuntu-2604-review-2026-10-09)。
 
@@ -300,7 +303,7 @@ GNOME 从 [GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts) 
 
 `WGac/TUI` 将 `TuiControllerBase` 与现有 wGac 字体/光标、按键名称和图像服务组合。计时器使用 VlppOS 所在线程的事件循环，所有窗口和对话框都绘制在终端单元中，不创建 Wayland surface 或 libdecor 窗口。字体度量固定为 `TuiFont`、字号 1，实际字体和颜色由终端决定。
 
-TUI 剪贴板使用 X11 selection（编译依赖包括 `libx11-dev`、`libxfixes-dev`）。在 Wayland 桌面中，XWayland 负责与其他桌面应用互通，请保留 `DISPLAY`。没有 X display 时，剪贴板对象仅在进程内共享。外部传输为 UTF-8 文本，富文档和图像对象只在应用内保留。XFixes 所有权通知会更新依赖剪贴板状态的命令。其他客户端读取 selection 时，本应用必须仍在运行。支持接收增量 selection；发送文本的大小不能超过 X 服务器的最大请求长度。
+TUI 和无界面的 Core 剪贴板使用 X11 selection（编译依赖包括 `libx11-dev`、`libxfixes-dev`）。在 Wayland 桌面中，XWayland 负责与其他桌面应用互通，请保留 `DISPLAY`。外部传输支持 UTF-8 文本、GacUI 富文档和 PNG 图像，并支持双向增量 selection。XFixes 所有权通知会更新依赖剪贴板状态的命令。其他客户端读取 selection 时，本应用必须仍在运行。没有 X display 时，TUI 会在进程内保留数据；无界面的 Core 会拒绝 OS 写入，除非使用 `--fakeClipboard` 选择私有回退。
 
 正常 Hide、Close 和 Stop 会恢复终端输入输出模式；关闭终端标签页不能替代正常退出测试。
 

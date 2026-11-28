@@ -34,10 +34,10 @@ static void copy_rgba_to_surface(const unsigned char* pixels, int width, int hei
             unsigned char b = src_row[x * 4 + 2];
             unsigned char a = src_row[x * 4 + 3];
 
-            // Cairo uses premultiplied alpha
-            r = r * a / 255;
-            g = g * a / 255;
-            b = b * a / 255;
+            // Round both conversions so PNG/clipboard roundtrips retain Cairo pixels.
+            r = (r * a + 127) / 255;
+            g = (g * a + 127) / 255;
+            b = (b * a + 127) / 255;
 
             // ARGB32 format: 0xAARRGGBB
             dest_row[x] = (a << 24) | (r << 16) | (g << 8) | b;
@@ -269,11 +269,11 @@ void WGacImage::SaveToStream(stream::IStream& imageStream, FormatType format)
             unsigned char g = (pixel >> 8) & 0xFF;
             unsigned char b = pixel & 0xFF;
 
-            // Unpremultiply alpha
+            // Pair nearest rounding with copy_rgba_to_surface to avoid cumulative loss.
             if (a > 0 && a < 255) {
-                r = r * 255 / a;
-                g = g * 255 / a;
-                b = b * 255 / a;
+                r = (r * 255 + a / 2) / a;
+                g = (g * 255 + a / 2) / a;
+                b = (b * 255 + a / 2) / a;
             }
 
             dest_row[x * 4 + 0] = r;
