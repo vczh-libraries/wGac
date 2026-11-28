@@ -310,11 +310,16 @@ void WGacClipboardService::data_device_data_offer(void* data, wl_data_device* /*
     wl_data_offer_add_listener(offer, &data_offer_listener, data);
 }
 
-void WGacClipboardService::data_device_enter(void* /*data*/, wl_data_device* /*device*/, uint32_t /*serial*/,
+void WGacClipboardService::data_device_enter(void* data, wl_data_device* /*device*/, uint32_t serial,
                                               wl_surface* /*surface*/, wl_fixed_t /*x*/, wl_fixed_t /*y*/,
-                                              wl_data_offer* /*offer*/)
+                                              wl_data_offer* offer)
 {
-    // DnD enter - not used for clipboard
+    if (!offer) return;
+    auto* self = static_cast<WGacClipboardService*>(data);
+    std::lock_guard<std::mutex> lock(self->mutex);
+    self->offers.erase(offer);
+    wl_data_offer_accept(offer, serial, nullptr);
+    wl_data_offer_destroy(offer);
 }
 
 void WGacClipboardService::data_device_leave(void* /*data*/, wl_data_device* /*device*/)
