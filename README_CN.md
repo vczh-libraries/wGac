@@ -202,9 +202,9 @@ Touching 保留 `Id="FullControlTest.Touching"`，解释器为空。`<wGac repo>
 
 `--hosted` 只能与 `--app:fct` 一起使用。`--port:<1-65535>` 只能与 `--app:renderer` 一起使用，用于选择该渲染器的自动化监听端口；它不会改变连接 Core 8888 端口的 `/MiniHttp` 通道。渲染器自动化端口默认为 8889。`--unblock` 会在后台启动所选程序并输出 PID。
 
-运行 `./build.sh` 后，`./test.sh --app:core` 会通过 MiniHTTP 启动本地 Core，默认运行 FCT。传入 `/RPT` 或 `/RVMT` 可选择其他应用。Core 和渲染器均默认共享剪贴板，任一端均可用 `--denyClipboard` 禁用共享。Core 可用 `--fakeClipboard` 将本地回退切换为内存剪贴板。浏览器可用 `?remoteClipboard=false` 禁用共享。
+运行 `./build.sh` 后，`./test.sh --app:core` 会通过 MiniHTTP 启动本地 Core，默认运行 FCT。传入 `/RPT` 或 `/RVMT` 可选择其他应用。Core 和渲染器均默认共享剪贴板，任一端均可用 `--denyClipboard` 禁用共享。Core 可用 `--fakeClipboard` 将本地回退切换为内存剪贴板。浏览器可用 `?remoteClipboard=false` 禁用共享。 共享时，在远程编辑器中复制的内容也可粘贴到渲染器机器上的其他应用。任一端禁用共享时，无界面的 Core 使用自身的 X11/XWayland 剪贴板或所选的内存剪贴板。
 
-`test_core.sh --protocol:minihttp` 的 `fct`、`rpt` 和 `rvmt` 均启动本平台 Core。手动 RVMT 和 `cpptest_rvm` 模式还会编译并启动同级 GacUI 仓库的 `RemotingTest_RvmHost`。后台模式输出两个 PID。`--app:rvmt --cli` 预先编译宿主，由 Core 通过标准输入输出启动。GacJS 提供网络宿主时可用 `test.sh --app:core /RVMT`；自定义命令须作为一个完整的 `/Cli:<command>` 参数传入。
+`test_core.sh --protocol:minihttp` 的 `fct`、`rpt` 和 `rvmt` 均启动本平台 Core。手动 RVMT 和 `cpptest_rvm` 模式还会编译并启动同级 GacUI 仓库的 `RemotingTest_RvmHost`。后台模式输出两个 PID。`--app:rvmt --cli` 预先编译宿主，由 Core 通过标准输入输出启动。GacJS 提供网络宿主时可用 `test.sh --app:core /RVMT`。自定义命令须作为一个完整的 `/Cli:<command>` 参数传入。
 
 普通应用在 8888 端口提供 MiniHTTP 自动化服务：
 
