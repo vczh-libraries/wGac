@@ -33,9 +33,9 @@ Read these files before changing this repository:
 - On Ubuntu, run `sudo ./build-prerequisites-ubuntu.sh` to install the system build dependencies. The prerequisite script requires root but never invokes `sudo` itself, and `./build.sh` never downloads or installs dependencies.
 - If `./build.sh` fails because Ubuntu packages are missing, do not add dependency-download logic to `build.sh`. Ask the user to run `sudo ./build-prerequisites-ubuntu.sh`; if system installation is unavailable, use a disposable container with the documented dependencies installed.
 - Build with `./build.sh` or clean-build with `./build.sh --rebuild`.
-- Test native apps with `./test.sh --app:simple`, `./test.sh --app:fct`, `./test.sh --app:fct --hosted`, `./test.sh --app:rvmt`, or `./test.sh --app:renderer`; use `./test_core.sh --app:fct|rpt|rvmt --protocol:minihttp` for the sibling GacUI Core-side launcher.
+- Test native apps with `./test.sh --app:simple`, `./test.sh --app:fct`, `./test.sh --app:fct --hosted`, `./test.sh --app:rvmt`, or `./test.sh --app:renderer`. Start the platform Core with `./test.sh --app:core`. Use `./test_core.sh --app:rvmt --protocol:minihttp` to start its native view-model host as well.
 - The simple, Full Control Test, and Remote View Model Test apps expose GacUI automation through MiniHTTP on port 8888.
-- The native remote renderer connects to `GacUI/Test/Linux/RemotingTest_Core` through `/MiniHttp`.
+- The native renderer connects to `<wGac repo>/build/RemotingTest_Core/bin/RemotingTest_Core` through MiniHTTP. Both endpoints accept `--denyClipboard`. Core also accepts `--fakeClipboard` for its local fallback.
 - Renderer automation uses port 8889 by default; use `--port:<port>` for a concurrent takeover renderer.
 
 ## Generated and Imported Files

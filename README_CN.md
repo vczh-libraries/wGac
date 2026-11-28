@@ -51,6 +51,7 @@ wGac/
 ├── WGacFullControlTest/               标准或 Hosted 模式的 Full Control Test
 ├── WGacTuiControlTest/                使用 TuiSkin 的终端控件展示
 ├── WGacCppTestRvm/                    Remote View Model Test 客户端
+├── RemotingTest_Core/                 使用本地剪贴板回退的 MiniHTTP Core
 ├── RemotingTest_Rendering_Wayland/    RemotingTest_Core 的原生渲染器
 ├── Apps/                              同步的资源和生成的 C++ 源码
 ├── Import/                            导入的 GacUI 合并源码
@@ -62,7 +63,7 @@ wGac/
 ├── build-prerequisites-ubuntu.sh      安装 Ubuntu 系统编译依赖
 ├── build.sh                           编译所有测试目标
 ├── test.sh                            启动一个原生测试目标
-└── test_core.sh                       全量编译并启动同级 GacUI 的 Core 侧目标
+└── test_core.sh                       启动本平台 Core 或本地 RVM 请求端及其宿主
 ```
 
 不能直接修改 `Import/` 和 `Import-Test/`；框架修复应提交到 GacUI，Wayland 兼容修复应提交到 wGac。这是开发行为规范；生成的文件和目录仍保留所有者写入权限。`Import-Test/` 保存专用的中立 `Test.RemotingHelpers` 文件对；stdio 传输实现由 `Import/` 中对应的 `VlppOS.Linux.cpp` 提供。这些文件只供平台测试目标使用，不属于常规 GacUI 框架快照。`Apps/*/Resources/` 和 `Apps/*/Source/` 中的文件由 `./syncProj.sh` 同步或生成，不能直接修改。
@@ -191,6 +192,8 @@ Touching 保留 `Id="FullControlTest.Touching"`，解释器为空。`<wGac repo>
 ./test.sh --app:renderer
 ./test.sh --app:renderer --port:8890
 ./test.sh --app:renderer --unblock
+./test.sh --app:core /FCT --unblock
+./test.sh --app:core /RPT --fakeClipboard --denyClipboard
 ./test_core.sh --app:cpptest_rvm --protocol:minihttp --unblock
 ./test_core.sh --app:fct --protocol:minihttp
 ./test_core.sh --app:rpt --protocol:minihttp
@@ -199,13 +202,9 @@ Touching 保留 `Id="FullControlTest.Touching"`，解释器为空。`<wGac repo>
 
 `--hosted` 只能与 `--app:fct` 一起使用。`--port:<1-65535>` 只能与 `--app:renderer` 一起使用，用于选择该渲染器的自动化监听端口；它不会改变连接 Core 8888 端口的 `/MiniHttp` 通道。渲染器自动化端口默认为 8889。`--unblock` 会在后台启动所选程序并输出 PID。
 
-`test_core.sh` 沿用相同的 `--app:` 和 `--unblock` 参数命名，并要求指定
-`--protocol:minihttp`（可移植平台唯一支持的传输）。它会在启动每个用到的
-GacUI 项目前，使用 `-f` 调用 GacUI 的 `Test/Linux` 编译脚本。手动模式的
-`cpptest_rvm` 和 `rvmt` 会先启动 requester/Core，等待一秒，再全量编译并
-启动 `RemotingTest_RvmHost`；后台手动模式会输出两个 PID。`--cli` 仅支持
-`--app:rvmt`，它会预先编译 host，并由 Core 通过 stdio 自动启动。
-可移植的 `Test_CppTest_Rvm` 仍只支持手动 `/MiniHttp`。
+运行 `./build.sh` 后，`./test.sh --app:core` 会通过 MiniHTTP 启动本地 Core，默认运行 FCT。传入 `/RPT` 或 `/RVMT` 可选择其他应用。Core 和渲染器均默认共享剪贴板，任一端均可用 `--denyClipboard` 禁用共享。Core 可用 `--fakeClipboard` 将本地回退切换为内存剪贴板。浏览器可用 `?remoteClipboard=false` 禁用共享。
+
+`test_core.sh --protocol:minihttp` 的 `fct`、`rpt` 和 `rvmt` 均启动本平台 Core。手动 RVMT 和 `cpptest_rvm` 模式还会编译并启动同级 GacUI 仓库的 `RemotingTest_RvmHost`。后台模式输出两个 PID。`--app:rvmt --cli` 预先编译宿主，由 Core 通过标准输入输出启动。GacJS 提供网络宿主时可用 `test.sh --app:core /RVMT`；自定义命令须作为一个完整的 `/Cli:<command>` 参数传入。
 
 普通应用在 8888 端口提供 MiniHTTP 自动化服务：
 
@@ -234,10 +233,7 @@ curl -H 'Content-Type: application/json; charset=utf8' \
 
 ## 原生远程渲染器
 
-以 `/MiniHttp` 模式编译并启动 `GacUI/Test/Linux/RemotingTest_Core`，应用参数选择 `/RPT` 或 `/FCT`，然后运行：
-
-`./test_core.sh --app:rpt --protocol:minihttp` 会全量编译并启动 `/RPT`
-形式（`/FCT` 请改用 `fct`）。现有 `test.sh` 继续用于启动原生渲染器：
+先用 `./test.sh --app:core /RPT --unblock`（或 `/FCT`）启动本平台 Core，再连接原生渲染器。
 
 ```bash
 ./test.sh --app:renderer
